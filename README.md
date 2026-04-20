@@ -1,16 +1,16 @@
 # Goalkeeper Positioning Analysis
 
-Analyse von Torwartpositionierung und Stellungsspiel im Fußball mit Methoden des Deep Learning und der angewandten Mathematik.
+Analysis of goalkeeper positioning and positional play in football using deep learning and applied mathematics.
 
-**Modul:** Mathematics and Deep Learning
-**Universität:** Universität Leipzig
-**Autor:** Lauren Pommer
+**Module:** Mathematics and Deep Learning  
+**University:** University of Leipzig  
+**Authors:** Lauren Pommer, [TBD]
 
-## Projektbeschreibung
+## Project Description
 
-_(TBD – Forschungsfrage, Hypothesen, Datengrundlage)_
+_(TBD – research question, hypotheses, data sources)_
 
-## Projektstruktur
+## Project Structure
 ## Setup
 
 ```bash
@@ -19,10 +19,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Nutzung
+## Usage
 
 _(TBD)_
 
-## Lizenz
+## License
 
 _(TBD)_
