@@ -1,0 +1,29 @@
+# Core
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+
+# Deep Learning
+torch>=2.2
+torchvision>=0.17
+
+# ML & Analysis
+scikit-learn>=1.4
+
+# Visualization
+matplotlib>=3.8
+seaborn>=0.13
+plotly>=5.18
+
+# Notebooks
+jupyter
+ipykernel
+
+# Utilities
+tqdm
+python-dotenv
+pyyaml
+
+# Dev
+pytest
+ruff

@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+
+# macOS
+.DS_Store
+._*
+
+# Data (große Files nicht ins Repo)
+data/raw/*
+data/processed/*
+data/external/*
+!data/**/.gitkeep
+
+# Models (trainierte Modelle nicht ins Repo)
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Logs & Experimente
+logs/
+wandb/
+mlruns/
+lightning_logs/
+
+# Env & Secrets
+.env
+.env.local
+*.key
+
+# Misc
+*.log
+.coverage
+htmlcov/
