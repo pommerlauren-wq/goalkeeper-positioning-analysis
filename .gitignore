@@ -45,6 +45,9 @@ models/*
 *.ckpt
 *.h5
 
+# Generated outputs (plots, reports, smoke-test artifacts)
+results/
+
 # Logs & Experimente
 logs/
 wandb/
