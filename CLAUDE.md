@@ -24,6 +24,15 @@ University of Leipzig research project (Mathematics and Deep Learning module) an
 - Anzer & Bauer (2021): RPS = 0.197 on Bundesliga data
 - StatsBomb built-in xG: `shot_statsbomb_xg` column in `df_event`
 
+### Data Notes
+
+`freeze_master_df` uses StatsBomb's **older shot-event freeze frame format**, not StatsBomb 360. Key properties:
+- Manually annotated, scoped to players in the vicinity of the shot — not full-pitch tracking data
+- No `visible_area` polygon: a player absent from the freeze frame means "not annotated near the shot," not "confirmed absent from the pitch"
+- GK coverage is 99.9% in the open-play sample, so the goalkeeper position signal is reliable
+- Median 13 visible players per shot (range 1–21), meaning context completeness varies across shots
+- Practical implication: model inputs will have more variance in context completeness than tracking-data-based work like Anzer & Bauer (2021), who used full optical tracking
+
 ## Setup
 
 ```bash

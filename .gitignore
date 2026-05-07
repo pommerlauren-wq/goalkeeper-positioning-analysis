@@ -32,6 +32,8 @@ ENV/
 # Data (große Files nicht ins Repo)
 data/raw/*
 data/processed/*
+!data/processed/splits/
+!data/processed/splits/**
 data/external/*
 !data/**/.gitkeep
 
