@@ -46,7 +46,8 @@ models/*
 *.h5
 
 # Generated outputs (plots, reports, smoke-test artifacts)
-results/
+results/*
+!results/rasterize_check/
 
 # Logs & Experimente
 logs/
