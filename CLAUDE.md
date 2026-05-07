@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Status (paused 2026-05-07)
+
+**Done:**
+- EDA: 81k open-play shots with freeze frames; goal rate 9.7-10.3% across splits
+- Splits built (option 3): men 2015/16 top 5 leagues = train/val/test (30k/6.4k/6.5k), women + men_other = transfer eval (12.6k + 25.8k)
+- Rasterization: 5 channels, 80×60 grid, sigma=1.5m, max-pooled Gaussians for crowd channels — verified visually
+- PyTorch Dataset (GoalkeeperShotsDataset) + DataLoader (make_dataloaders) — smoke test passes
+- Filter for un-rasterizable shots applied to manifests; 0.12% of train dropped
+
+**Next up:**
+- Implement DangerCNN model (src/models/danger_cnn.py) — see prompt history
+- Training loop with BCEWithLogitsLoss
+- Counterfactual sweep: V(x, g) heatmaps by varying g
+- Compare to StatsBomb xG and Anzer & Bauer baseline (RPS=0.197)
+
+**Open questions:**
+- Extend pitch crop to x ∈ [60, 122] so GK Gaussian doesn't gd at right edge?
+- Share EDA findings with Hannes before next coding session
+
 ## Project
 
 University of Leipzig research project (Mathematics and Deep Learning module) analyzing goalkeeper positioning in football using StatsBomb event data, deep learning (PyTorch), and applied mathematics.
