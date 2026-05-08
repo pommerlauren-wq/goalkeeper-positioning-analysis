@@ -6,9 +6,19 @@ defenders) fixed and evaluate V(x, g) = P(goal | x, g) over a 2D grid of
 candidate goalkeeper positions g. The optimal position is g* = argmin V(x, g),
 and regret = V(x, g_actual) - V(x, g*).
 
-Default GK grid covers the 6-yard area in front of goal:
-  x in [110, 120] (1m past 18-yard line through the goal line), step 0.5m
-  y in [30, 50]   (centered on the goal mouth y in [36, 44]),    step 0.5m
+Default GK grid is restricted to physically realistic positions:
+  x in [108, 120] (penalty spot to goal line),                  step 0.5m
+  y in [34,  46] (goal posts at 36 and 44, +2m diving margin),  step 0.5m
+
+The y bounds [34, 46] are intentional. The model has no structural knowledge
+that y in [36, 44] defines the goal mouth, so without the constraint g*
+migrates to positions behind the post (y < 34 or y > 46) where V is lower
+purely because the GK Gaussian is rendered outside the danger region. Any
+further widening of this grid produces unphysical optima; if g* pins to the
+y boundary it is a model artifact (no goal-frame inductive bias), not a
+truncated minimum that more grid would fix. See
+docs/notes_for_supervisor_2026-05-08.md for the diagnostic that established
+this.
 
 Run as a script to produce 8 example visualizations on the test split:
     python src/analysis/counterfactual.py
@@ -27,6 +37,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+from matplotlib.patches import Rectangle
 from mplsoccer import Pitch
 
 from src.data.rasterize import (
@@ -42,8 +53,8 @@ SHOTS_PATH = _REPO_ROOT / "data/raw/shots_master_df.csv"
 FREEZE_PATH = _REPO_ROOT / "data/raw/freeze_master_df.csv"
 TEST_MANIFEST = _REPO_ROOT / "data/processed/splits/test_shot_ids.csv"
 
-DEFAULT_GRID_X = np.linspace(110.0, 120.0, 21)
-DEFAULT_GRID_Y = np.linspace(30.0, 50.0, 41)
+DEFAULT_GRID_X = np.arange(108.0, 120.5, 0.5)  # 25 points, includes goal line
+DEFAULT_GRID_Y = np.arange(34.0, 46.5, 0.5)    # 25 points, ~2m diving margin past posts
 
 
 def _select_device() -> torch.device:
@@ -52,6 +63,33 @@ def _select_device() -> torch.device:
     if torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def _draw_pitch_overlays(ax) -> None:
+    """Draw goal line, posts, 6-yard / 18-yard boxes, and penalty spot.
+
+    Coords are StatsBomb world meters (120 x 80, attacker -> right). Lines
+    are black; matplotlib clips features that fall outside the axes.
+    """
+    # 18-yard box: x in [102, 120], y in [18, 62]
+    ax.add_patch(Rectangle(
+        (102.0, 18.0), 18.0, 44.0,
+        fill=False, edgecolor="black", linewidth=0.7, alpha=0.55, zorder=2,
+    ))
+    # 6-yard box: x in [114, 120], y in [30, 50]
+    ax.add_patch(Rectangle(
+        (114.0, 30.0), 6.0, 20.0,
+        fill=False, edgecolor="black", linewidth=1.0, zorder=3,
+    ))
+    # Goal line at x = 120
+    ax.axvline(x=120.0, color="black", linewidth=1.6, zorder=4)
+    # Goalposts at (120, 36) and (120, 44) — bold squares with white core
+    ax.scatter([120.0, 120.0], [36.0, 44.0],
+               s=70, marker="s", color="black", edgecolors="white",
+               linewidths=0.8, zorder=5)
+    # Penalty spot at (108, 40)
+    ax.scatter([108.0], [40.0], s=24, marker="o", color="black",
+               edgecolors="white", linewidths=0.5, zorder=4)
 
 
 def _actual_gk_pos(freeze_rows: pd.DataFrame) -> tuple[float, float]:
@@ -174,35 +212,34 @@ def visualize_sweep(
     ax2 = fig.add_subplot(gs[0, 1])
     im = ax2.pcolormesh(grid_x, grid_y, danger, cmap="Reds", shading="auto")
     fig.colorbar(im, ax=ax2, label="V(x, g)")
+    _draw_pitch_overlays(ax2)
     ax2.scatter([a_gx], [a_gy], s=180, color="#2ca02c", marker="o",
-                edgecolors="black", linewidths=1.0, label="Actual", zorder=5)
+                edgecolors="black", linewidths=1.0, label="Actual", zorder=6)
     ax2.scatter([o_gx], [o_gy], s=280, color="gold", marker="*",
-                edgecolors="black", linewidths=1.0, label="g*", zorder=6)
-    # Goal posts y in [36, 44] for reference
-    for gy_post in (36.0, 44.0):
-        ax2.axhline(gy_post, color="black", linestyle=":", linewidth=0.8, alpha=0.5)
+                edgecolors="black", linewidths=1.0, label="g*", zorder=7)
+    ax2.set_xlim(grid_x.min(), grid_x.max())
+    ax2.set_ylim(grid_y.max(), grid_y.min())  # invert to match StatsBomb pitch
     ax2.set_xlabel("GK x (m)")
     ax2.set_ylabel("GK y (m)")
     ax2.set_title("V(x, g) heatmap")
     ax2.legend(loc="upper right", fontsize=8, framealpha=0.9)
-    ax2.invert_yaxis()  # match StatsBomb pitch (y=0 at top)
 
     # --- Panel 3: contour ---
     ax3 = fig.add_subplot(gs[1, 0])
     cs = ax3.contourf(grid_x, grid_y, danger, levels=15, cmap="Reds")
     ax3.contour(grid_x, grid_y, danger, levels=8, colors="black", linewidths=0.5, alpha=0.5)
     fig.colorbar(cs, ax=ax3, label="V(x, g)")
+    _draw_pitch_overlays(ax3)
     ax3.scatter([a_gx], [a_gy], s=180, color="#2ca02c", marker="o",
-                edgecolors="black", linewidths=1.0, label="Actual", zorder=5)
+                edgecolors="black", linewidths=1.0, label="Actual", zorder=6)
     ax3.scatter([o_gx], [o_gy], s=280, color="gold", marker="*",
-                edgecolors="black", linewidths=1.0, label="g*", zorder=6)
-    for gy_post in (36.0, 44.0):
-        ax3.axhline(gy_post, color="black", linestyle=":", linewidth=0.8, alpha=0.5)
+                edgecolors="black", linewidths=1.0, label="g*", zorder=7)
+    ax3.set_xlim(grid_x.min(), grid_x.max())
+    ax3.set_ylim(grid_y.max(), grid_y.min())
     ax3.set_xlabel("GK x (m)")
     ax3.set_ylabel("GK y (m)")
     ax3.set_title("V(x, g) contour")
     ax3.legend(loc="upper right", fontsize=8, framealpha=0.9)
-    ax3.invert_yaxis()
 
     # --- Panel 4: text summary ---
     ax4 = fig.add_subplot(gs[1, 1])
@@ -320,7 +357,11 @@ def run_sweep_on_examples(
                 {
                     "shot_id": r["shot_id"],
                     "is_goal": r["is_goal"],
+                    "actual_gk_x": r["actual_gk_pos"][0],
+                    "actual_gk_y": r["actual_gk_pos"][1],
                     "actual_v": r["actual_v"],
+                    "optimal_gk_x": r["optimal_gk_pos"][0],
+                    "optimal_gk_y": r["optimal_gk_pos"][1],
                     "optimal_v": r["optimal_v"],
                     "regret": r["actual_v"] - r["optimal_v"],
                 }
@@ -343,7 +384,11 @@ def run_sweep_on_examples(
                 {
                     "shot_id": sid,
                     "is_goal": r["is_goal"],
+                    "actual_gk_x": r["actual_gk_pos"][0],
+                    "actual_gk_y": r["actual_gk_pos"][1],
                     "actual_v": r["actual_v"],
+                    "optimal_gk_x": r["optimal_gk_pos"][0],
+                    "optimal_gk_y": r["optimal_gk_pos"][1],
                     "optimal_v": r["optimal_v"],
                     "regret": r["actual_v"] - r["optimal_v"],
                     "category": "user",
