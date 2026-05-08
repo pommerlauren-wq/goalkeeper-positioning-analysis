@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status (paused 2026-05-07)
+## Status (paused 2026-05-08)
 
 **Done:**
 - EDA: 81k open-play shots with freeze frames; goal rate 9.7-10.3% across splits
@@ -10,15 +10,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Rasterization: 5 channels, 80×60 grid, sigma=1.5m, max-pooled Gaussians for crowd channels — verified visually
 - PyTorch Dataset (GoalkeeperShotsDataset) + DataLoader (make_dataloaders) — smoke test passes
 - Filter for un-rasterizable shots applied to manifests; 0.12% of train dropped
+- DangerCNN baseline_v1 trained: test AUC 0.803, Brier 0.075, ECE 0.010
+- Decile calibration excellent (predicted vs actual within 1.5pp across all 10 buckets)
+- Pearson correlation with StatsBomb xG = 0.74 (agreement in direction, independent in absolute terms)
+- Training plateaus around epoch 5-7; later epochs overfit train without improving val
+- Diagnosis: saturated input representation, not broken model
 
-**Next up:**
-- Implement DangerCNN model (src/models/danger_cnn.py) — see prompt history
-- Training loop with BCEWithLogitsLoss
-- Counterfactual sweep: V(x, g) heatmaps by varying g
-- Compare to StatsBomb xG and Anzer & Bauer baseline (RPS=0.197)
+**Future v2 levers (not currently planned):**
+- Parallel scalar head with distance/angle/body part (most likely to close StatsBomb gap)
+- Wider pitch crop x ∈ [60, 122] to fit GK Gaussian fully
+- Y-axis flip data augmentation
+- Heavier dropout / weight decay
+
+**Next:**
+- Counterfactual sweep V(x, g) — the actual research contribution
+- Transfer evaluation on women / men_other splits
+- Latent embedding analysis from pre-MLP features
 
 **Open questions:**
-- Extend pitch crop to x ∈ [60, 122] so GK Gaussian doesn't gd at right edge?
 - Share EDA findings with Hannes before next coding session
 
 ## Project
