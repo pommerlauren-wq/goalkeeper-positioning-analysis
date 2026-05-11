@@ -48,6 +48,7 @@ models/*
 # Generated outputs (plots, reports, smoke-test artifacts)
 results/*
 !results/rasterize_check/
+!results/counterfactual/
 
 # Logs & Experimente
 logs/
