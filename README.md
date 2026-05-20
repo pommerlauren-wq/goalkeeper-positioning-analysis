@@ -45,7 +45,7 @@ notebooks/               # exploratory analysis
 
 ### 1. Build the master shot/freeze CSVs
 
-The training pipeline expects `data/raw/shots_master_df.csv` and `data/raw/freeze_master_df.csv` (one row per shot / per freeze-frame player). These are produced from `mplsoccer.Sbopen` in `notebooks/01_eda.ipynb`. Run that notebook end-to-end the first time you set up the project.
+The training pipeline expects `data/raw/shots_master_df.csv` and `data/raw/freeze_master_df.csv` (one row per shot / per freeze-frame player). These are produced from `mplsoccer.Sbopen` in `notebooks/Data_Loading_and_Exploration.ipynb`. Run that notebook end-to-end the first time you set up the project.
 
 ### 2. Build the splits
 
