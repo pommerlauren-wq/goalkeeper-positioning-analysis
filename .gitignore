@@ -40,15 +40,19 @@ data/external/*
 # Models (trainierte Modelle nicht ins Repo)
 models/*
 !models/.gitkeep
+!models/checkpoints/
 *.pt
 *.pth
 *.ckpt
 *.h5
+!models/checkpoints/**/*.pt
 
 # Generated outputs (plots, reports, smoke-test artifacts)
 results/*
 !results/rasterize_check/
 !results/counterfactual/
+!results/eda/
+!results/eval/
 
 # Logs & Experimente
 logs/
