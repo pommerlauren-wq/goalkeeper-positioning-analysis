@@ -15,6 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Pearson correlation with StatsBomb xG = 0.74 (agreement in direction, independent in absolute terms)
 - Training plateaus around epoch 5-7; later epochs overfit train without improving val
 - Diagnosis: saturated input representation, not broken model
+- Counterfactual sweep V(x, g) runs end-to-end on baseline_v1: 8 example shots (high/low/random regret), v1 wide grid + v2 constrained grid, regret CSV
+- Finding: g* is grid-dependent; under wide grid 7/8 optima pin behind the goal posts; constrained grid pulls 6/8 inside goal mouth but 2/8 still pin at edge. Diagnosis: v1 has no structural knowledge of the goal frame, so V drops monotonically as the synthetic GK moves *away* from the goal mouth — a spurious "GKs in goal mouth correlate with goals" signal, not a learned positional optimum.
+- Decision-point doc for supervisor: docs/notes_for_supervisor_2026-05-08.md (lays out options A/B/C)
 
 **Future v2 levers (not currently planned):**
 - Parallel scalar head with distance/angle/body part (most likely to close StatsBomb gap)
@@ -22,13 +25,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Y-axis flip data augmentation
 - Heavier dropout / weight decay
 
-**Next:**
-- Counterfactual sweep V(x, g) — the actual research contribution
-- Transfer evaluation on women / men_other splits
-- Latent embedding analysis from pre-MLP features
+**Next — blocked on supervisor decision (A/B/C in notes_for_supervisor_2026-05-08.md):**
+- A: add structural priors / goal-aware inputs to v2 (goal-mouth channel, distance/angle scalar head) → retrain, then redo sweep
+- B: drop g* recommendation, evaluate V(x, g_actual) only and compare to StatsBomb xG
+- C: write up the grid-dependence finding as a limits-of-data-driven-counterfactuals result
+- Transfer eval (women / men_other) and latent embedding analysis are downstream of this choice — meaningful under A and B, less so under C
 
 **Open questions:**
-- Share EDA findings with Hannes before next coding session
+- Awaiting Hannes / supervisor input on A/B/C and on whether constrained grid y ∈ [34, 46] is a defensible canonical eval region
 
 ## Project
 
