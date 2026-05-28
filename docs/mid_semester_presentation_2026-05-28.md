@@ -1,4 +1,4 @@
-gi# Mid-semester presentation — current position
+# Mid-semester presentation — current position
 
 **Date:** 2026-05-28
 **Presenter:** Lauren Pommer
