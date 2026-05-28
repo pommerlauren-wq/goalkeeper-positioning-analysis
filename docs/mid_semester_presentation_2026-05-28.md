@@ -1,4 +1,4 @@
-# Mid-semester presentation — current position
+gi# Mid-semester presentation — current position
 
 **Date:** 2026-05-28
 **Presenter:** Lauren Pommer
@@ -253,14 +253,16 @@ contribution about model–task mismatch in football analytics.
 1. Title + project goal (`V(x, g) = P(goal | x, g)`, sweep diagram)
 2. Data — StatsBomb open data, sample sizes, the freeze-frame caveat
 3. The prediction problem visualised — rasterisation example (`rasterize_check`)
-4. Model — DangerCNN, 5 channels, training curves
-5. Baseline_v1 results — AUC / Brier / ECE / vs StatsBomb xG
-6. Counterfactual sweep — what we ran (grids), one example heatmap
-7. **The key finding** — grid-dependence, behind-the-post recommendation, diagnosis
-8. What works / what doesn't (the summary table from §6)
-9. Next steps — A / B / C decision and downstream work
+4. **Theory I — supervised learning setup** (from `docs/theory_background_2026-05-28.md` §1–2): BCE as Bernoulli NLL → calibrated probabilities; CNN inductive biases (locality + translation equivariance); the *missing* prior (no goal-frame structure)
+5. Model — DangerCNN, 5 channels, training curves
+6. Baseline_v1 results — AUC / Brier / ECE / vs StatsBomb xG
+7. **Theory II — counterfactual sweep and regret** (theory doc §3–4): definition of `g* = argmin_g V(x, g)`; regret `R = V(x, g_actual) − V(x, g*)`; why regret factors out intrinsic shot difficulty
+8. Counterfactual sweep — what we ran (grids), one example heatmap
+9. **The key finding** — grid-dependence, behind-the-post recommendation, diagnosis as observational/causal failure
+10. What works / what doesn't (the summary table from §6)
+11. Next steps — A / B / C decision and downstream work
 
-Total: 9 slides; pace ~1.5 min/slide for a ~15 min talk.
+Total: 11 slides; pace ~1.3 min/slide for a ~15 min talk. If time pressure, theory I and theory II can each be compressed to a half-slide alongside their adjacent application slide (4+5 merged, 7+8 merged) → back to 9 slides.
 
 ---
 
