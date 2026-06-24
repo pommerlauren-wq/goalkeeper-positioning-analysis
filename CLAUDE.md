@@ -29,7 +29,7 @@ The predictive-vs-counterfactual tension is itself a result (see below).
 - Tier 1 feature engineering shipped. rasterize_shot(include_geometry=True) appends 5 static channels after the GK channel: goal_frame (Gaussian ridge on the goal-line segment), dist_to_goal, goal_angle (posts' subtended view angle), coord_x, coord_y (CoordConv). GK stays at channel index 4 in both 5- and 10-channel layouts.
 - DangerCNN gained a `pool_size` arg (int or (h,w) tuple). v2 uses a (4,3) adaptive pool instead of global average pooling, so absolute spatial layout survives into the head. (4,3) chosen because the pre-pool map is 20×15 and MPS needs the output to divide it evenly; square 3/4 fails on MPS.
 - baseline_v2 config: include_geometry=True, in_channels=10, pool_size=[4,3], 194k params (within the 100-200k budget). Trained 24 epochs (early-stopped, best epoch 14).
-- v2 test metrics: AUC 0.809 (v1 0.803), Brier 0.072 (v1 0.075), ECE 0.007 (v1 0.010). Closer to StatsBomb xG (AUC 0.821); calibration preserved.
+- v2 test metrics (5-seed mean ± std): AUC 0.814 ± 0.003, Brier 0.0716 ± 0.0001, ECE 0.0077 ± 0.0008 (v1 single-run 0.803/0.075/0.010). Closer to StatsBomb xG (AUC 0.821) than the original seed-42-only number (0.809) suggested; calibration preserved. NOTE: earlier docs/commits quoted AUC 0.809 — that was seed 42, the weakest of the 5; the mean is 0.814.
 - Counterfactual sweep is now channel-count-agnostic (overwrites the GK channel rather than concat-at-end); _load_model and evaluate.py read in_channels/pool_size/include_geometry from the saved config, so v1 and v2 both load correctly.
 - v2 sweep on the same 8 example shots (constrained grid): 0/8 pinned to edge (v1 had 2/8), and the anti-coaching far-post pull is gone (e.g. shot 0c5620fc, shooter y=45.5: v1 → far post y=34; v2 → near post (112.5, 45.5), advanced off the line to cut the angle). PNGs in results/counterfactual/v2_geom/.
 - v2 aggregate over 200 seeded test shots (src/analysis/regret_distribution.py): median regret 0.0097 (goals 0.051, saves 0.008), max 0.238. y-edge pinned 1/200 (0.5%); far-side optima 0/200 (0.0%); post-side split 182 centre / 18 near / 0 far. Table: results/counterfactual/v2_geom/regret_200.csv
@@ -43,13 +43,18 @@ The predictive-vs-counterfactual tension is itself a result (see below).
 - **Key finding — predictive vs counterfactual tension is a *training* effect, not an inference one.** The "context" scalars are g-independent, so they add a constant to every grid cell's logit and *cannot* change argmin_g — yet v3b's g* still degraded vs v2. The only difference is the CNN branch's learned weights: adding any auxiliary predictive head lets the conv layers offload variance onto the scalar MLP, so the spatial branch becomes a worse function of keeper position. Conclusion: a single model can't be both the best xG predictor and the best positioning recommender with this architecture.
 - Artifacts: results/counterfactual/v3_scalar/, results/counterfactual/v3b_context/ (8 PNGs + regret_200.csv each); models/checkpoints/baseline_v3{,b}/.
 
+**Done (v2 validation, 2026-06-24):**
+- Multi-seed CIs (src/training/multiseed_v2.py, 5 seeds): test AUC 0.814 ± 0.003, Brier 0.0716 ± 0.0001, ECE 0.0077 ± 0.0008. Counterfactual on the fixed 200-shot sample: median regret 0.0099 ± 0.0011, y-edge pinned 0.7% ± 0.45%, far-side/anti-coaching 0.2% ± 0.45% (range 0–1%). The clean-counterfactual property is reproducible, not a lucky seed; v2 0.2% vs v3 19.5% far-side is ~40σ apart. Per-seed checkpoints gitignored (models/checkpoints/v2_seeds/); kept: results/eval/v2_multiseed_summary.csv + results/counterfactual/v2_seeds/seed*_regret.csv.
+- Transfer eval of baseline_v2 (predictive): test AUC 0.809 / women 0.781 / men_other 0.797; the gap to StatsBomb xG is stable across domains (~0.012–0.014 AUC). ECE stays ≤1.7pp out-of-domain. Brier rises partly from higher transfer base rates (women 10.3%, men_other 11.25%). Predictions in results/eval/baseline_v2/transfer_*_predictions.csv.
+- Transfer counterfactual quality (200-shot, src/analysis/regret_distribution.py now takes split=): far-side stays ≈0 out-of-domain (women 0%, men_other 1%), pinning ≤3%. v2's g* recommendations generalize — the goal-frame geometry that drives g* is domain-invariant even though raw P(goal) accuracy drops. Tables: results/counterfactual/v2_transfer_{women,men_other}/regret_200.csv.
+
 **Recommendation / model selection:**
-- **Positioning recommender (project goal): use v2.** Only model with clean counterfactuals (0% anti-coaching).
-- **Predictive benchmark vs StatsBomb xG: cite v3** (AUC 0.820 ≈ 0.821).
+- **Positioning recommender (project goal): use v2.** Only model with clean counterfactuals (0.2% ± 0.45% anti-coaching across seeds), and they hold on transfer.
+- **Predictive benchmark vs StatsBomb xG: cite v3** (AUC 0.820 ≈ 0.821). NOTE: v2's multi-seed mean is 0.814, so the v2→v3 predictive gap (~0.006) is only ~2σ; a v3 multi-seed run would be needed to make that comparison airtight. The *counterfactual* gap needs no further seeds.
 - The v2/v3/v3b sweep is a reportable result about auxiliary-head training interference.
 
 **Next (not yet done):**
-- Transfer eval (women / men_other) on v2 — now meaningful since v2's g* is sensible
+- v3 multi-seed CIs (to firm up the v2-vs-v3 *predictive* comparison)
 - Latent embedding analysis
 - Possible: revisit best-of-both via training tricks (e.g. stop-gradient between scalar head and conv trunk, or a two-model setup — v2 for g*, v3 for absolute P(goal))
 - Separate ball channel from shooter (rasterize.py still copies it); defenders-in-cone channel; wider crop x ∈ [60,122]; y-flip augmentation

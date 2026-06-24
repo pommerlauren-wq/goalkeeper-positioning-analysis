@@ -55,6 +55,7 @@ def compute_regret_distribution(
     sample_size: int = 200,
     seed: int = 42,
     output_csv: Path | None = None,
+    split: str = "test",
 ) -> pd.DataFrame:
     checkpoint_path = Path(checkpoint_path)
     if not checkpoint_path.is_absolute():
@@ -68,11 +69,13 @@ def compute_regret_distribution(
     freeze_df = pd.read_csv(FREEZE_PATH)
     shots_by_id = shots_df.set_index("id")
 
-    # Reproduce the exact seeded sample run_sweep_on_examples draws.
+    # Reproduce the exact seeded sampling style of run_sweep_on_examples, on the
+    # chosen split's manifest (test / transfer_women / transfer_men_other).
+    manifest = TEST_MANIFEST.parent / f"{split}_shot_ids.csv"
     rng = np.random.default_rng(seed)
-    test_ids = pd.read_csv(TEST_MANIFEST)["id"].tolist()
-    idx = rng.choice(len(test_ids), size=min(sample_size, len(test_ids)), replace=False)
-    sample_ids = [test_ids[i] for i in idx]
+    split_ids = pd.read_csv(manifest)["id"].tolist()
+    idx = rng.choice(len(split_ids), size=min(sample_size, len(split_ids)), replace=False)
+    sample_ids = [split_ids[i] for i in idx]
 
     y_lo, y_hi = float(DEFAULT_GRID_Y.min()), float(DEFAULT_GRID_Y.max())
     x_hi = float(DEFAULT_GRID_X.max())
