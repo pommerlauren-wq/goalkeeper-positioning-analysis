@@ -45,6 +45,27 @@ Artefacts: `results/counterfactual/v3_scalar/`, `results/counterfactual/v3b_cont
 
 ---
 
+## Update 3 (2026-06-24): position-jitter augmentation — tested, neutral
+
+You suggested data augmentation with slightly perturbed positions. We tried it
+(v2 + train-only Gaussian jitter σ=0.75 m on every player, re-sampled per epoch)
+and the result is **neutral**: predictive AUC 0.810 (inside v2's multi-seed
+range), counterfactual far-side/pinning/regret unchanged, and — measuring it
+directly — the V(x,g) landscape roughness is **identical** (mean total-variation
+0.0053 vs 0.0053). The smoothing we hoped for didn't materialize, because v2's
+goal-geometry channels already give a smooth, clean landscape; there was no
+brittleness left to fix. So: a good idea in general, but not a needed lever here
+— the inductive-bias work already covered it. (It's a nice robustness check
+though: v2's clean g* survives perturbing every training position.)
+
+For reference, your other suggestions map to: distance-to-goal / coordinates →
+done (geometry channels + scalar features); inductive biases → done (goal-frame
+channel + CoordConv + spatial pool, the decisive fix); balance the dataset →
+deliberately not done (it would break calibration, which the V=P(goal)
+interpretation depends on, and there is no imbalance pathology).
+
+---
+
 ## Update 1 (2026-06-24): Option A implemented, and it worked
 
 We took **Option A** (add structural / goal-aware inputs) and it resolved the

@@ -153,11 +153,21 @@ def _identify_goalkeeper(freeze_rows: pd.DataFrame) -> pd.Series:
     return candidates.loc[d2.idxmin()]
 
 
-def _max_combine(rows: pd.DataFrame) -> np.ndarray:
+def _jitter(x: float, y: float, sigma: float) -> tuple[float, float]:
+    """Add independent Gaussian noise (std `sigma` m) to a position. Uses the
+    global numpy RNG, which the training loop seeds, so jitter is reproducible.
+    """
+    if sigma <= 0.0:
+        return x, y
+    return x + np.random.normal(0.0, sigma), y + np.random.normal(0.0, sigma)
+
+
+def _max_combine(rows: pd.DataFrame, jitter_sigma: float = 0.0) -> np.ndarray:
     """Render each row's Gaussian and combine by elementwise max."""
     out = np.zeros((GRID_H, GRID_W), dtype=np.float64)
     for _, row in rows.iterrows():
-        g = render_gaussian(GRID_H, GRID_W, float(row["x"]), float(row["y"]), SIGMA)
+        cx, cy = _jitter(float(row["x"]), float(row["y"]), jitter_sigma)
+        g = render_gaussian(GRID_H, GRID_W, cx, cy, SIGMA)
         np.maximum(out, g, out=out)
     return out
 
@@ -166,12 +176,18 @@ def rasterize_shot(
     shot_row: pd.Series,
     freeze_rows: pd.DataFrame,
     include_geometry: bool = False,
+    jitter_sigma: float = 0.0,
 ) -> torch.Tensor:
     """Rasterize one shot + its freeze frame into a float tensor.
 
     Shape is (5, 80, 60), or (10, 80, 60) when `include_geometry=True` (the
     five static goal-geometry channels are appended after the GK channel). See
     module docstring for channel layout and coordinate convention.
+
+    `jitter_sigma` > 0 adds independent Gaussian noise (std in metres) to every
+    rendered *player* position (train-time augmentation). The static geometry
+    channels and the off-crop check use the original, unperturbed positions.
+    Sample fresh per call (do not cache) for true per-epoch augmentation.
 
     Raises
     ------
@@ -187,23 +203,23 @@ def rasterize_shot(
             f"is outside crop x[{X_MIN},{X_MAX}] y[{Y_MIN},{Y_MAX}]."
         )
 
-    shooter = render_gaussian(GRID_H, GRID_W, sx, sy, SIGMA)
+    jx, jy = _jitter(sx, sy, jitter_sigma)
+    shooter = render_gaussian(GRID_H, GRID_W, jx, jy, SIGMA)
     ball = shooter.copy()
 
     gk_row = _identify_goalkeeper(freeze_rows)
-    gk = render_gaussian(
-        GRID_H, GRID_W, float(gk_row["x"]), float(gk_row["y"]), SIGMA
-    )
+    gkx, gky = _jitter(float(gk_row["x"]), float(gk_row["y"]), jitter_sigma)
+    gk = render_gaussian(GRID_H, GRID_W, gkx, gky, SIGMA)
 
     teammate_mask = freeze_rows["teammate"].astype(bool)
     shooter_pid = shot_row.get("player_id", None)
     teammates_df = freeze_rows[teammate_mask]
     if shooter_pid is not None and not pd.isna(shooter_pid):
         teammates_df = teammates_df[teammates_df["player_id"] != shooter_pid]
-    teammates = _max_combine(teammates_df)
+    teammates = _max_combine(teammates_df, jitter_sigma)
 
     defenders_df = freeze_rows[(~teammate_mask) & (freeze_rows.index != gk_row.name)]
-    defenders = _max_combine(defenders_df)
+    defenders = _max_combine(defenders_df, jitter_sigma)
 
     stack = np.stack([shooter, ball, teammates, defenders, gk], axis=0)
     if include_geometry:

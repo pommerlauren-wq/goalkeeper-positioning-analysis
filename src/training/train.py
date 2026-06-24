@@ -93,11 +93,13 @@ def _build_dataloaders(
     include_geometry = config["include_geometry"]
     include_scalars = config.get("include_scalars", False)
     scalar_feature_set = config.get("scalar_feature_set", "all")
+    # Position-jitter augmentation is train-only; val/test are always clean.
+    jitter_sigma = config.get("jitter_sigma", 0.0)
     train_ds = GoalkeeperShotsDataset(
         SPLITS_DIR / "train_shot_ids.csv",
         shots_df, freeze_df, cache_in_memory=cache_train,
         include_geometry=include_geometry, include_scalars=include_scalars,
-        scalar_feature_set=scalar_feature_set,
+        scalar_feature_set=scalar_feature_set, jitter_sigma=jitter_sigma,
     )
     # If we're caching train, val (~615 MB) is a small extra cost and avoids
     # validation dominating per-epoch time.
@@ -338,17 +340,15 @@ def train_model(config: dict) -> dict:
 
 
 if __name__ == "__main__":
-    # baseline_v3b = v2 (goal-geometry channels + (4,3) spatial pool) plus a
-    # Tier 2 scalar head restricted to the g-INDEPENDENT "context" features
-    # (distance, angle, body part, under_pressure). v3 ("all" features) closed
-    # the xG gap but reintroduced anti-coaching g* by giving the model a second,
-    # non-spatial route to the keeper position; v3b keeps the shot-difficulty
-    # signal while leaving keeper position purely spatial.
-    # For v3 set scalar_feature_set="all"; for v2 include_scalars=False,
-    # scalar_dim=0; for v1 also include_geometry=False, in_channels=5, pool_size=1.
-    from src.features.scalar_features import scalar_dim
-
-    scalar_feature_set = "context"
+    # baseline_v2 = goal-geometry channels (in_channels=10) + (4,3) spatial pool,
+    # no scalar head. This is the recommended positioning model (clean, stable,
+    # transferable counterfactual g*); running this file as-is reproduces it.
+    # Variants via flags:
+    #   v1   -> include_geometry=False, in_channels=5, pool_size=1
+    #   v3   -> include_scalars=True, scalar_feature_set="all",     scalar_dim=9
+    #   v3b  -> include_scalars=True, scalar_feature_set="context", scalar_dim=6
+    #   jitter augmentation -> jitter_sigma=0.75 (train-only; found neutral here,
+    #     see CLAUDE.md — does not improve g*, ~3x slower since caching is off)
     config = {
         "epochs": 50,
         "batch_size": 64,
@@ -358,13 +358,13 @@ if __name__ == "__main__":
         "early_stopping_patience": 10,
         "device": "auto",
         "checkpoint_dir": "models/checkpoints",
-        "run_name": "baseline_v3b",
+        "run_name": "baseline_v2",
         "include_geometry": True,
         "in_channels": 10,
         "pool_size": [4, 3],
-        "include_scalars": True,
-        "scalar_feature_set": scalar_feature_set,
-        "scalar_dim": scalar_dim(scalar_feature_set),
+        "include_scalars": False,
+        "scalar_dim": 0,
+        "jitter_sigma": 0.0,
         "log_every_n_batches": 0,
         "cache_train_in_memory": True,
         "num_workers": 0,

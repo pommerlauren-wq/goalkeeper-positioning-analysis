@@ -52,10 +52,12 @@ class GoalkeeperShotsDataset(Dataset):
         include_geometry: bool = False,
         include_scalars: bool = False,
         scalar_feature_set: str = "all",
+        jitter_sigma: float = 0.0,
     ) -> None:
         self.include_geometry = include_geometry
         self.include_scalars = include_scalars
         self.scalar_feature_set = scalar_feature_set
+        self.jitter_sigma = jitter_sigma
         n_channels = N_PLAYER_CHANNELS + (N_GEOMETRY_CHANNELS if include_geometry else 0)
         bytes_per_tensor = n_channels * GRID_H * GRID_W * 4  # float32
         manifest = pd.read_csv(manifest_path)
@@ -72,6 +74,15 @@ class GoalkeeperShotsDataset(Dataset):
 
         self._shots_by_id = shots_df.set_index("id")
         self._freeze_by_id = freeze_df.groupby("id")
+
+        # Position jitter must be re-sampled each epoch, so a cached (frozen)
+        # raster would defeat the augmentation. Disable caching when jittering.
+        if jitter_sigma > 0.0 and cache_in_memory:
+            print(
+                f"GoalkeeperShotsDataset({manifest_path.name}): jitter_sigma="
+                f"{jitter_sigma} > 0, disabling in-memory cache so noise re-samples."
+            )
+            cache_in_memory = False
 
         self._cache: list | None = None
         if cache_in_memory:
@@ -90,7 +101,8 @@ class GoalkeeperShotsDataset(Dataset):
         shot_row = self._shots_by_id.loc[sid]
         freeze_rows = self._freeze_by_id.get_group(sid)
         raster = rasterize_shot(
-            shot_row, freeze_rows, include_geometry=self.include_geometry
+            shot_row, freeze_rows, include_geometry=self.include_geometry,
+            jitter_sigma=self.jitter_sigma,
         )
         if not self.include_scalars:
             return raster
