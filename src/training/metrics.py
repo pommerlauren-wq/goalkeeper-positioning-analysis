@@ -23,7 +23,7 @@ def expected_calibration_error(
 
 
 def compute_metrics(y_true: np.ndarray, y_pred_probs: np.ndarray) -> dict:
-    """Return auc, brier, log_loss, accuracy_at_0.5, expected_calibration_error."""
+    """Return auc, brier, log_loss, expected_calibration_error."""
     y_true = np.asarray(y_true).astype(float)
     p = np.asarray(y_pred_probs).astype(float)
     p_clip = np.clip(p, 1e-7, 1.0 - 1e-7)
@@ -31,7 +31,6 @@ def compute_metrics(y_true: np.ndarray, y_pred_probs: np.ndarray) -> dict:
         "auc": float(roc_auc_score(y_true, p)),
         "brier": float(np.mean((p - y_true) ** 2)),
         "log_loss": float(log_loss(y_true, p_clip)),
-        "accuracy_at_0.5": float(np.mean(y_true == (p >= 0.5).astype(float))),
         "expected_calibration_error": expected_calibration_error(y_true, p),
     }
 

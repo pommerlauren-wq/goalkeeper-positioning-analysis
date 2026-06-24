@@ -1,7 +1,8 @@
 """
 Rasterize a single shot + its freeze frame into a multi-channel tensor for the CNN.
 
-Output shape: (5, 80, 60) — channels x H (y) x W (x after crop).
+Output shape: (5, 80, 60) by default, or (10, 80, 60) with `include_geometry=True`
+— channels x H (y) x W (x after crop).
 
 Coordinate convention:
   StatsBomb pitch is 120 (length) x 80 (width), with shots already normalized
@@ -9,7 +10,7 @@ Coordinate convention:
   [0, 80], at 1m per cell -> grid (H=80, W=60). Cell (h, w) is centered at
   world (x=60+w+0.5, y=h+0.5). World y maps to grid H, world x maps to grid W.
 
-Channels:
+Player channels (always present):
   0 shooter           single Gaussian at the shot location
   1 ball              identical to shooter for now (TODO: aerial passes /
                       first-time shots will use the pass-end position)
@@ -22,6 +23,18 @@ Channels:
   3 defenders         defending team excluding the goalkeeper, same combine.
   4 goalkeeper        single Gaussian at the GK position.
 
+Geometry channels (only with include_geometry=True, appended after the GK
+channel so the GK stays at index 4). These are STATIC — identical for every
+shot — and give the CNN explicit knowledge of the goal frame plus an absolute
+spatial reference (CoordConv-style), which the player-only raster lacks:
+  5 goal_frame        Gaussian ridge on distance to the goal-line segment
+                      {x=120, y in [36, 44]} — i.e. "where the goal mouth is".
+  6 dist_to_goal      distance from each cell to the goal centre, normalized.
+  7 goal_angle        angle subtended by the two posts from each cell (the xG
+                      "view angle"), normalized by pi.
+  8 coord_x           normalized world x in [0, 1] across the crop (CoordConv).
+  9 coord_y           normalized world y in [0, 1] across the crop (CoordConv).
+
 Off-crop handling:
   - Shooter outside [60, 120] x [0, 80] -> raises ShotOutsideCropError.
   - Other players outside the crop are clip-rendered: only the in-grid tail
@@ -30,6 +43,7 @@ Off-crop handling:
 
 from __future__ import annotations
 
+import functools
 from pathlib import Path
 
 import numpy as np
@@ -42,6 +56,14 @@ GRID_W = int(X_MAX - X_MIN)
 GRID_H = int(Y_MAX - Y_MIN)
 SIGMA = 1.5
 GOAL_CENTER = (120.0, 40.0)
+GOAL_LINE_X = 120.0
+POST_LEFT_Y, POST_RIGHT_Y = 36.0, 44.0
+
+# Channel bookkeeping. The GK is index 4 in both the 5- and 10-channel layouts,
+# so the counterfactual sweep can overwrite a single channel regardless of mode.
+GK_CHANNEL_IDX = 4
+N_PLAYER_CHANNELS = 5
+N_GEOMETRY_CHANNELS = 5
 
 
 class ShotOutsideCropError(ValueError):
@@ -73,6 +95,44 @@ def render_gaussian(
     return np.exp(-d2 / (2.0 * sigma ** 2))
 
 
+@functools.lru_cache(maxsize=1)
+def geometry_channels() -> np.ndarray:
+    """Build the static (5, H, W) geometry stack. See module docstring.
+
+    Identical for every shot, so computed once and cached. Returned array must
+    not be mutated by callers (it is shared); rasterize_shot only concatenates.
+    """
+    col_centers = np.arange(GRID_W) + 0.5 + X_MIN  # world x per column
+    row_centers = np.arange(GRID_H) + 0.5  # world y per row
+    cx = np.broadcast_to(col_centers[None, :], (GRID_H, GRID_W)).astype(np.float64)
+    cy = np.broadcast_to(row_centers[:, None], (GRID_H, GRID_W)).astype(np.float64)
+
+    # 5 goal_frame: Gaussian on distance to the goal-line segment.
+    cy_on_seg = np.clip(cy, POST_LEFT_Y, POST_RIGHT_Y)
+    dist_seg = np.sqrt((GOAL_LINE_X - cx) ** 2 + (cy_on_seg - cy) ** 2)
+    goal_frame = np.exp(-(dist_seg ** 2) / (2.0 * SIGMA ** 2))
+
+    # 6 dist_to_goal: distance to goal centre, normalized to [0, 1] over crop.
+    gx, gy = GOAL_CENTER
+    dist_center = np.sqrt((gx - cx) ** 2 + (gy - cy) ** 2)
+    dist_center = dist_center / dist_center.max()
+
+    # 7 goal_angle: angle subtended by the two posts from each cell, in [0, 1].
+    lx, ly = GOAL_LINE_X - cx, POST_LEFT_Y - cy
+    rx, ry = GOAL_LINE_X - cx, POST_RIGHT_Y - cy
+    dot = lx * rx + ly * ry
+    cross = lx * ry - ly * rx
+    goal_angle = np.arctan2(np.abs(cross), dot) / np.pi
+
+    # 8, 9 coord_x / coord_y: normalized world coordinates (CoordConv).
+    coord_x = (cx - X_MIN) / (X_MAX - X_MIN)
+    coord_y = cy / Y_MAX
+
+    return np.stack(
+        [goal_frame, dist_center, goal_angle, coord_x, coord_y], axis=0
+    )
+
+
 def _identify_goalkeeper(freeze_rows: pd.DataFrame) -> pd.Series:
     """Return the defending goalkeeper row from a shot's freeze frame.
 
@@ -102,10 +162,16 @@ def _max_combine(rows: pd.DataFrame) -> np.ndarray:
     return out
 
 
-def rasterize_shot(shot_row: pd.Series, freeze_rows: pd.DataFrame) -> torch.Tensor:
-    """Rasterize one shot + its freeze frame into a (5, 80, 60) float tensor.
+def rasterize_shot(
+    shot_row: pd.Series,
+    freeze_rows: pd.DataFrame,
+    include_geometry: bool = False,
+) -> torch.Tensor:
+    """Rasterize one shot + its freeze frame into a float tensor.
 
-    See module docstring for channel layout and coordinate convention.
+    Shape is (5, 80, 60), or (10, 80, 60) when `include_geometry=True` (the
+    five static goal-geometry channels are appended after the GK channel). See
+    module docstring for channel layout and coordinate convention.
 
     Raises
     ------
@@ -140,6 +206,8 @@ def rasterize_shot(shot_row: pd.Series, freeze_rows: pd.DataFrame) -> torch.Tens
     defenders = _max_combine(defenders_df)
 
     stack = np.stack([shooter, ball, teammates, defenders, gk], axis=0)
+    if include_geometry:
+        stack = np.concatenate([stack, geometry_channels()], axis=0)
     return torch.from_numpy(stack).float()
 
 
@@ -177,9 +245,13 @@ def _save_panels(tensor: torch.Tensor, path: Path, shot_id) -> None:
     import matplotlib.pyplot as plt
 
     arr = tensor.numpy()
-    titles = ["shooter", "ball", "teammates", "defenders", "goalkeeper"]
-    fig, axes = plt.subplots(1, 5, figsize=(20, 5))
-    for ax, ch, title in zip(axes, arr, titles):
+    titles = [
+        "shooter", "ball", "teammates", "defenders", "goalkeeper",
+        "goal_frame", "dist_to_goal", "goal_angle", "coord_x", "coord_y",
+    ][: arr.shape[0]]
+    n = arr.shape[0]
+    fig, axes = plt.subplots(1, n, figsize=(4 * n, 5))
+    for ax, ch, title in zip(np.atleast_1d(axes), arr, titles):
         ax.imshow(
             ch,
             origin="lower",
@@ -217,7 +289,11 @@ if __name__ == "__main__":
     sample_id = None
     for sid in [train_ids[0]] + rng.sample(train_ids, 50):
         try:
-            t = rasterize_shot(shots_by_id.loc[sid], freeze_by_id.get_group(sid))
+            t = rasterize_shot(
+                shots_by_id.loc[sid],
+                freeze_by_id.get_group(sid),
+                include_geometry=True,
+            )
         except (ShotOutsideCropError, ValueError, KeyError):
             continue
         sample_id = sid

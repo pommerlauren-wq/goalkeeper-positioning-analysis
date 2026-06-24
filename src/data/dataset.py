@@ -26,9 +26,13 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 
-from src.data.rasterize import GRID_H, GRID_W, rasterize_shot
-
-BYTES_PER_TENSOR = 5 * GRID_H * GRID_W * 4  # 5 channels, float32
+from src.data.rasterize import (
+    GRID_H,
+    GRID_W,
+    N_GEOMETRY_CHANNELS,
+    N_PLAYER_CHANNELS,
+    rasterize_shot,
+)
 
 
 class GoalkeeperShotsDataset(Dataset):
@@ -40,7 +44,11 @@ class GoalkeeperShotsDataset(Dataset):
         shots_df: pd.DataFrame,
         freeze_df: pd.DataFrame,
         cache_in_memory: bool = False,
+        include_geometry: bool = False,
     ) -> None:
+        self.include_geometry = include_geometry
+        n_channels = N_PLAYER_CHANNELS + (N_GEOMETRY_CHANNELS if include_geometry else 0)
+        bytes_per_tensor = n_channels * GRID_H * GRID_W * 4  # float32
         manifest = pd.read_csv(manifest_path)
         missing = {"id", "is_goal"} - set(manifest.columns)
         if missing:
@@ -59,10 +67,10 @@ class GoalkeeperShotsDataset(Dataset):
         self._cache: list[torch.Tensor] | None = None
         if cache_in_memory:
             n = len(self.shot_ids)
-            est_mb = n * BYTES_PER_TENSOR / (1024 * 1024)
+            est_mb = n * bytes_per_tensor / (1024 * 1024)
             print(
                 f"GoalkeeperShotsDataset({manifest_path.name}): caching {n} shots "
-                f"in memory ({BYTES_PER_TENSOR / 1024:.1f} KB/shot, "
+                f"in memory ({bytes_per_tensor / 1024:.1f} KB/shot, "
                 f"~{est_mb:.0f} MB total)."
             )
             self._cache = [self._rasterize(i) for i in range(n)]
@@ -72,6 +80,7 @@ class GoalkeeperShotsDataset(Dataset):
         return rasterize_shot(
             self._shots_by_id.loc[sid],
             self._freeze_by_id.get_group(sid),
+            include_geometry=self.include_geometry,
         )
 
     def __len__(self) -> int:

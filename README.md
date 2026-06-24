@@ -127,7 +127,7 @@ model(x)                  # for inference; returns sigmoid probabilities
 
 # Metrics (training/metrics.py)
 compute_metrics(y_true, y_pred_probs)
-    # -> {auc, brier, log_loss, accuracy_at_0.5, expected_calibration_error}
+    # -> {auc, brier, log_loss, expected_calibration_error}
 ```
 
 ## Input representation

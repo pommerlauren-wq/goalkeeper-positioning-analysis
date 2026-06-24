@@ -63,7 +63,10 @@ def evaluate_model(checkpoint_path: Path | str, split_name: str) -> dict:
     run_name = config.get("run_name", checkpoint_path.parent.name)
 
     device = _select_device()
-    model = DangerCNN().to(device)
+    model = DangerCNN(
+        in_channels=config.get("in_channels", 5),
+        pool_size=config.get("pool_size", 1),
+    ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     print(
@@ -75,7 +78,10 @@ def evaluate_model(checkpoint_path: Path | str, split_name: str) -> dict:
     shots_df = pd.read_csv(SHOTS_PATH)
     freeze_df = pd.read_csv(FREEZE_PATH)
     manifest_path = SPLITS_DIR / f"{split_name}_shot_ids.csv"
-    ds = GoalkeeperShotsDataset(manifest_path, shots_df, freeze_df, cache_in_memory=False)
+    ds = GoalkeeperShotsDataset(
+        manifest_path, shots_df, freeze_df, cache_in_memory=False,
+        include_geometry=config.get("include_geometry", False),
+    )
     loader = DataLoader(
         ds, batch_size=config.get("batch_size", 64), shuffle=False, num_workers=0
     )
@@ -144,7 +150,7 @@ if __name__ == "__main__":
     print(f"  {'metric':>30s}  {'DangerCNN':>10s}  {'StatsBomb xG':>14s}")
     if result["statsbomb_xg_metrics"] is not None:
         for k in (
-            "auc", "brier", "log_loss", "accuracy_at_0.5", "expected_calibration_error",
+            "auc", "brier", "log_loss", "expected_calibration_error",
         ):
             print(
                 f"  {k:>30s}  {result['model_metrics'][k]:>10.4f}  "

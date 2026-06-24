@@ -41,8 +41,10 @@ from matplotlib.patches import Rectangle
 from mplsoccer import Pitch
 
 from src.data.rasterize import (
+    GK_CHANNEL_IDX,
     GRID_H,
     GRID_W,
+    N_PLAYER_CHANNELS,
     SIGMA,
     rasterize_shot,
     render_gaussian,
@@ -125,8 +127,13 @@ def sweep_gk_positions(
     if device is None:
         device = next(model.parameters()).device
 
-    base = rasterize_shot(shot_row, freeze_rows)  # (5, 80, 60)
-    context = base[:4].unsqueeze(0).to(device)  # (1, 4, 80, 60)
+    # Match the channel layout the model was trained on. With geometry channels
+    # the raster is (10, H, W); without, (5, H, W). The GK is at GK_CHANNEL_IDX
+    # in both, so we sweep by overwriting that single channel and leaving the
+    # player + static geometry channels fixed.
+    include_geometry = model.conv1.in_channels == N_PLAYER_CHANNELS + 5
+    base = rasterize_shot(shot_row, freeze_rows, include_geometry=include_geometry)
+    base = base.to(device)  # (C, 80, 60)
 
     n_y, n_x = len(gk_grid_y), len(gk_grid_x)
     n = n_y * n_x
@@ -137,8 +144,10 @@ def sweep_gk_positions(
         for gx in gk_grid_x:
             gk_channels[k] = render_gaussian(GRID_H, GRID_W, float(gx), float(gy), SIGMA)
             k += 1
-    gk_tensor = torch.from_numpy(gk_channels).unsqueeze(1).to(device)  # (N, 1, 80, 60)
-    batch = torch.cat([context.expand(n, -1, -1, -1), gk_tensor], dim=1)  # (N, 5, 80, 60)
+    gk_tensor = torch.from_numpy(gk_channels).to(device)  # (N, 80, 60)
+
+    batch = base.unsqueeze(0).expand(n, -1, -1, -1).clone()  # (N, C, 80, 60)
+    batch[:, GK_CHANNEL_IDX] = gk_tensor  # overwrite GK channel per grid point
 
     model.eval()
     with torch.no_grad():
@@ -271,7 +280,11 @@ def visualize_sweep(
 
 def _load_model(checkpoint_path: Path, device: torch.device) -> DangerCNN:
     ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    model = DangerCNN().to(device)
+    config = ckpt.get("config", {})
+    model = DangerCNN(
+        in_channels=config.get("in_channels", 5),
+        pool_size=config.get("pool_size", 1),
+    ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     return model

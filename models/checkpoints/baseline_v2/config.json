@@ -1,0 +1,21 @@
+{
+  "epochs": 50,
+  "batch_size": 64,
+  "learning_rate": 0.001,
+  "weight_decay": 1e-05,
+  "optimizer": "adam",
+  "early_stopping_patience": 10,
+  "device": "auto",
+  "checkpoint_dir": "models/checkpoints",
+  "run_name": "baseline_v2",
+  "include_geometry": true,
+  "in_channels": 10,
+  "pool_size": [
+    4,
+    3
+  ],
+  "log_every_n_batches": 0,
+  "cache_train_in_memory": true,
+  "num_workers": 0,
+  "seed": 42
+}

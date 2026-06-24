@@ -1,8 +1,17 @@
 """
-DangerCNN: V(x, g) = P(goal | x, g) from a 5-channel pitch raster.
+DangerCNN: V(x, g) = P(goal | x, g) from a rasterized pitch.
 
 Channels (in order): shooter, ball, attacking_teammates, defenders_excl_gk,
-goalkeeper. Input (B, 5, 80, 60), output (B,) probability in [0, 1].
+goalkeeper, then (optionally) 5 static goal-geometry channels. Input
+(B, in_channels, 80, 60), output (B,) probability in [0, 1].
+
+`pool_size` controls the adaptive-average-pool grid before the head. It may be an
+int (square) or an (h, w) tuple. pool_size=1 (default, baseline_v1) collapses the
+whole pitch to a per-channel average, which discards absolute location; a larger
+grid (baseline_v2 uses (4, 3)) keeps a coarse spatial layout so the head can
+reason about *where* signals are, not just how much. Note the feature map before
+this pool is 20x15, and MPS requires the output to divide it evenly — (4, 3) does
+(20/4, 15/3); a square 3 or 4 does not.
 
 Use `forward_logits(x)` for training (paired with BCEWithLogitsLoss for
 numerical stability) and `forward(x)` for inference (returns probabilities).
@@ -16,8 +25,17 @@ import torch.nn.functional as F
 
 
 class DangerCNN(nn.Module):
-    def __init__(self, in_channels: int = 5, dropout_p: float = 0.3) -> None:
+    def __init__(
+        self,
+        in_channels: int = 5,
+        dropout_p: float = 0.3,
+        pool_size: int | tuple[int, int] = 1,
+    ) -> None:
         super().__init__()
+        # Normalize to an (h, w) tuple; JSON round-trips pool_size as a list.
+        if isinstance(pool_size, int):
+            pool_size = (pool_size, pool_size)
+        self.pool_size: tuple[int, int] = (int(pool_size[0]), int(pool_size[1]))
 
         self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(32)
@@ -28,7 +46,7 @@ class DangerCNN(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.bn3 = nn.BatchNorm2d(128)
 
-        self.fc1 = nn.Linear(128, 64)
+        self.fc1 = nn.Linear(128 * self.pool_size[0] * self.pool_size[1], 64)
         self.dropout = nn.Dropout(dropout_p)
         self.fc2 = nn.Linear(64, 1)
 
@@ -54,7 +72,7 @@ class DangerCNN(nn.Module):
 
         x = F.relu(self.bn3(self.conv3(x)))
 
-        x = F.adaptive_avg_pool2d(x, 1).flatten(1)
+        x = F.adaptive_avg_pool2d(x, self.pool_size).flatten(1)
 
         x = F.relu(self.fc1(x))
         x = self.dropout(x)

@@ -3,9 +3,55 @@
 **Date:** 2026-05-08
 **Author:** Lauren Pommer
 **Audience:** Hannes; supervisor
-**Status:** decision point — looking for input before continuing
+**Status:** RESOLVED — Option A implemented (baseline_v2), see update below.
 
-## TL;DR
+---
+
+## Update (2026-06-24): Option A implemented, and it worked
+
+We took **Option A** (add structural / goal-aware inputs) and it resolved the
+grid-dependence problem. Summary for the supervisor:
+
+**What changed (Tier 1 feature engineering):**
+- Five static goal-geometry channels appended to the raster: a goal-frame
+  Gaussian ridge on the goal-line segment, distance-to-goal, the angle
+  subtended by the two posts ("view angle"), and two normalized coordinate
+  channels (CoordConv). The model can now *see* where the goal is.
+- The global-average-pool head was replaced with a small (4×3) spatial pool, so
+  absolute location survives into the classifier rather than being averaged away
+  — this was a second, independent reason v1 reasoned about density not geometry.
+- baseline_v2: 10 input channels, 194k params (within budget), trained in 24
+  epochs (early-stopped). Calibration deliberately preserved (no class
+  rebalancing, no pos_weight).
+
+**Results:**
+- Test metrics improved and calibration held: AUC 0.803 → **0.809**, Brier
+  0.075 → **0.072**, ECE 0.010 → **0.007**. Closer to StatsBomb xG (AUC 0.821).
+- Counterfactual sweep, 8 example shots: **0/8 optima pinned to the grid edge**
+  (v1 had 2/8 on the constrained grid, 7/8 on the wide grid). The anti-coaching
+  far-post pull is gone — e.g. the shot from (111.2, 45.5)-type wide angles now
+  send g* toward the *near* post and *off the line* to cut the angle, as a coach
+  would.
+- 200-shot aggregate (seeded): median regret 0.010 (goals 0.051, saves 0.008);
+  y-edge pinned **1/200 (0.5%)**; far-side / anti-coaching optima **0/200
+  (0.0%)**; post-side split 182 centre / 18 near / **0 far**.
+
+**Answer to the original Q3 (is the constrained grid defensible?):** less
+load-bearing now — v2 no longer pins to the edge regardless of grid, so g* is
+not an artefact of where we draw the box.
+
+**Open for the supervisor (new):**
+- Q2 from below still stands: Tier 2 would add a *hand-engineered scalar head*
+  (distance / angle / GK angular coverage). It is the most likely way to close
+  the residual ~0.012 AUC gap and sharpen near/far-post discrimination (v2
+  optima are 91% "centre"), but it trades away some of the "purely spatial"
+  methodological appeal. Proceed to Tier 2, or move to transfer eval first?
+
+The original decision-point write-up is preserved below for reference.
+
+---
+
+## TL;DR (original, 2026-05-08)
 
 The counterfactual sweep `V(x, g) = P(goal | x, g)` runs end-to-end on the
 DangerCNN baseline (`baseline_v1`, test AUC 0.803, Brier 0.075, ECE 0.010).

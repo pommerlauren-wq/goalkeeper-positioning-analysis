@@ -90,15 +90,18 @@ def _build_dataloaders(
     config: dict, shots_df: pd.DataFrame, freeze_df: pd.DataFrame
 ) -> tuple[DataLoader, DataLoader]:
     cache_train = config["cache_train_in_memory"]
+    include_geometry = config["include_geometry"]
     train_ds = GoalkeeperShotsDataset(
         SPLITS_DIR / "train_shot_ids.csv",
         shots_df, freeze_df, cache_in_memory=cache_train,
+        include_geometry=include_geometry,
     )
     # If we're caching train, val (~615 MB) is a small extra cost and avoids
     # validation dominating per-epoch time.
     val_ds = GoalkeeperShotsDataset(
         SPLITS_DIR / "val_shot_ids.csv",
         shots_df, freeze_df, cache_in_memory=cache_train,
+        include_geometry=include_geometry,
     )
     common = {
         "batch_size": config["batch_size"],
@@ -198,9 +201,15 @@ def train_model(config: dict) -> dict:
     print("Building DataLoaders...")
     train_loader, val_loader = _build_dataloaders(config, shots_df, freeze_df)
 
-    model = DangerCNN().to(device)
+    model = DangerCNN(
+        in_channels=config["in_channels"],
+        pool_size=config["pool_size"],
+    ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Model: DangerCNN, {n_params:,} params")
+    print(
+        f"Model: DangerCNN, {n_params:,} params "
+        f"(in_channels={config['in_channels']}, pool_size={config['pool_size']})"
+    )
 
     criterion = nn.BCEWithLogitsLoss()
     if config["optimizer"] == "adam":
@@ -263,7 +272,6 @@ def train_model(config: dict) -> dict:
             "val_auc": val_metrics["auc"],
             "val_brier": val_metrics["brier"],
             "val_log_loss": val_metrics["log_loss"],
-            "val_accuracy_at_0.5": val_metrics["accuracy_at_0.5"],
             "val_ece": val_metrics["expected_calibration_error"],
             "lr": lr,
             "epoch_time_s": elapsed,
@@ -313,6 +321,11 @@ def train_model(config: dict) -> dict:
 
 
 if __name__ == "__main__":
+    # baseline_v2: goal-geometry channels (in_channels=10) + spatial-preserving
+    # pool. Pool is (4, 3) not square: the pre-pool map is 20x15 and MPS needs
+    # the output to divide it evenly (20/4, 15/3); it also matches the pitch
+    # (4 along x/depth, 3 across y). ~135k params, inside the 100-200k budget.
+    # Set include_geometry=False, in_channels=5, pool_size=1 to reproduce v1.
     config = {
         "epochs": 50,
         "batch_size": 64,
@@ -322,7 +335,10 @@ if __name__ == "__main__":
         "early_stopping_patience": 10,
         "device": "auto",
         "checkpoint_dir": "models/checkpoints",
-        "run_name": "baseline_v1",
+        "run_name": "baseline_v2",
+        "include_geometry": True,
+        "in_channels": 10,
+        "pool_size": [4, 3],
         "log_every_n_batches": 0,
         "cache_train_in_memory": True,
         "num_workers": 0,
@@ -344,7 +360,7 @@ if __name__ == "__main__":
     print(f"\nTest set ({test_result['n_shots']:,} shots):")
     print(f"  {'metric':>30s}  {'DangerCNN':>10s}  {'StatsBomb xG':>14s}")
     if test_result["statsbomb_xg_metrics"] is not None:
-        for k in ("auc", "brier", "log_loss", "accuracy_at_0.5", "expected_calibration_error"):
+        for k in ("auc", "brier", "log_loss", "expected_calibration_error"):
             print(
                 f"  {k:>30s}  {test_result['model_metrics'][k]:>10.4f}  "
                 f"{test_result['statsbomb_xg_metrics'][k]:>14.4f}"
