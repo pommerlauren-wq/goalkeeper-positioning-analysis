@@ -49,6 +49,7 @@ from src.data.rasterize import (
     rasterize_shot,
     render_gaussian,
 )
+from src.features.scalar_features import compute_scalar_features
 from src.models.danger_cnn import DangerCNN
 
 SHOTS_PATH = _REPO_ROOT / "data/raw/shots_master_df.csv"
@@ -138,22 +139,45 @@ def sweep_gk_positions(
     n_y, n_x = len(gk_grid_y), len(gk_grid_x)
     n = n_y * n_x
 
+    # If the model has a scalar head, recompute scalars per grid point (the
+    # GK-dependent features change as g is swept); otherwise leave them None.
+    use_scalars = getattr(model, "scalar_dim", 0) > 0
+    feature_set = getattr(model, "scalar_feature_set", "all")
     gk_channels = np.empty((n, GRID_H, GRID_W), dtype=np.float32)
+    scalar_rows = (
+        np.empty((n, model.scalar_dim), dtype=np.float32) if use_scalars else None
+    )
     k = 0
     for gy in gk_grid_y:
         for gx in gk_grid_x:
             gk_channels[k] = render_gaussian(GRID_H, GRID_W, float(gx), float(gy), SIGMA)
+            if use_scalars:
+                scalar_rows[k] = compute_scalar_features(
+                    shot_row, freeze_rows, gk_pos=(float(gx), float(gy)),
+                    feature_set=feature_set,
+                )
             k += 1
     gk_tensor = torch.from_numpy(gk_channels).to(device)  # (N, 80, 60)
 
     batch = base.unsqueeze(0).expand(n, -1, -1, -1).clone()  # (N, C, 80, 60)
     batch[:, GK_CHANNEL_IDX] = gk_tensor  # overwrite GK channel per grid point
 
+    if use_scalars:
+        scalar_batch = torch.from_numpy(scalar_rows).to(device)  # (N, scalar_dim)
+        actual_scalars = torch.from_numpy(
+            compute_scalar_features(shot_row, freeze_rows, feature_set=feature_set)[None, :]
+        ).to(device)
+    else:
+        scalar_batch = None
+        actual_scalars = None
+
     model.eval()
     with torch.no_grad():
-        probs = torch.sigmoid(model.forward_logits(batch)).cpu().numpy()
+        probs = torch.sigmoid(model.forward_logits(batch, scalar_batch)).cpu().numpy()
         actual_v = float(
-            torch.sigmoid(model.forward_logits(base.unsqueeze(0).to(device))).cpu().item()
+            torch.sigmoid(
+                model.forward_logits(base.unsqueeze(0).to(device), actual_scalars)
+            ).cpu().item()
         )
     danger_grid = probs.reshape(n_y, n_x)
 
@@ -284,9 +308,13 @@ def _load_model(checkpoint_path: Path, device: torch.device) -> DangerCNN:
     model = DangerCNN(
         in_channels=config.get("in_channels", 5),
         pool_size=config.get("pool_size", 1),
+        scalar_dim=config.get("scalar_dim", 0),
     ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
+    # Stash which scalar feature set this checkpoint used so the sweep can
+    # recompute matching features as it sweeps g.
+    model.scalar_feature_set = config.get("scalar_feature_set", "all")
     return model
 
 

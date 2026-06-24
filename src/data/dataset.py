@@ -33,10 +33,15 @@ from src.data.rasterize import (
     N_PLAYER_CHANNELS,
     rasterize_shot,
 )
+from src.features.scalar_features import compute_scalar_features
 
 
 class GoalkeeperShotsDataset(Dataset):
-    """One split of shots, exposing rasterized tensors and is_goal labels."""
+    """One split of shots, exposing rasterized tensors and is_goal labels.
+
+    With include_scalars=True each item is (raster, scalars, is_goal); otherwise
+    (raster, is_goal). Scalars are the Tier 2 shot/keeper geometry features.
+    """
 
     def __init__(
         self,
@@ -45,8 +50,12 @@ class GoalkeeperShotsDataset(Dataset):
         freeze_df: pd.DataFrame,
         cache_in_memory: bool = False,
         include_geometry: bool = False,
+        include_scalars: bool = False,
+        scalar_feature_set: str = "all",
     ) -> None:
         self.include_geometry = include_geometry
+        self.include_scalars = include_scalars
+        self.scalar_feature_set = scalar_feature_set
         n_channels = N_PLAYER_CHANNELS + (N_GEOMETRY_CHANNELS if include_geometry else 0)
         bytes_per_tensor = n_channels * GRID_H * GRID_W * 4  # float32
         manifest = pd.read_csv(manifest_path)
@@ -64,7 +73,7 @@ class GoalkeeperShotsDataset(Dataset):
         self._shots_by_id = shots_df.set_index("id")
         self._freeze_by_id = freeze_df.groupby("id")
 
-        self._cache: list[torch.Tensor] | None = None
+        self._cache: list | None = None
         if cache_in_memory:
             n = len(self.shot_ids)
             est_mb = n * bytes_per_tensor / (1024 * 1024)
@@ -73,22 +82,34 @@ class GoalkeeperShotsDataset(Dataset):
                 f"in memory ({bytes_per_tensor / 1024:.1f} KB/shot, "
                 f"~{est_mb:.0f} MB total)."
             )
-            self._cache = [self._rasterize(i) for i in range(n)]
+            self._cache = [self._build(i) for i in range(n)]
 
-    def _rasterize(self, idx: int) -> torch.Tensor:
+    def _build(self, idx: int):
+        """Return the raster, or (raster, scalars) when include_scalars."""
         sid = self.shot_ids[idx]
-        return rasterize_shot(
-            self._shots_by_id.loc[sid],
-            self._freeze_by_id.get_group(sid),
-            include_geometry=self.include_geometry,
+        shot_row = self._shots_by_id.loc[sid]
+        freeze_rows = self._freeze_by_id.get_group(sid)
+        raster = rasterize_shot(
+            shot_row, freeze_rows, include_geometry=self.include_geometry
         )
+        if not self.include_scalars:
+            return raster
+        scalars = torch.from_numpy(
+            compute_scalar_features(
+                shot_row, freeze_rows, feature_set=self.scalar_feature_set
+            )
+        )
+        return raster, scalars
 
     def __len__(self) -> int:
         return len(self.shot_ids)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        x = self._cache[idx] if self._cache is not None else self._rasterize(idx)
-        return x, self.labels[idx]
+    def __getitem__(self, idx: int):
+        item = self._cache[idx] if self._cache is not None else self._build(idx)
+        if self.include_scalars:
+            raster, scalars = item
+            return raster, scalars, self.labels[idx]
+        return item, self.labels[idx]
 
 
 if __name__ == "__main__":

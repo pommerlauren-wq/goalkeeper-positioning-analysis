@@ -66,6 +66,7 @@ def evaluate_model(checkpoint_path: Path | str, split_name: str) -> dict:
     model = DangerCNN(
         in_channels=config.get("in_channels", 5),
         pool_size=config.get("pool_size", 1),
+        scalar_dim=config.get("scalar_dim", 0),
     ).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
@@ -81,6 +82,8 @@ def evaluate_model(checkpoint_path: Path | str, split_name: str) -> dict:
     ds = GoalkeeperShotsDataset(
         manifest_path, shots_df, freeze_df, cache_in_memory=False,
         include_geometry=config.get("include_geometry", False),
+        include_scalars=config.get("include_scalars", False),
+        scalar_feature_set=config.get("scalar_feature_set", "all"),
     )
     loader = DataLoader(
         ds, batch_size=config.get("batch_size", 64), shuffle=False, num_workers=0
@@ -88,9 +91,15 @@ def evaluate_model(checkpoint_path: Path | str, split_name: str) -> dict:
 
     all_y, all_p = [], []
     with torch.no_grad():
-        for x, y in loader:
+        for batch in loader:
+            if len(batch) == 3:
+                x, scalars, y = batch
+                scalars = scalars.to(device, non_blocking=True)
+            else:
+                x, y = batch
+                scalars = None
             x = x.to(device, non_blocking=True)
-            logits = model.forward_logits(x)
+            logits = model.forward_logits(x, scalars)
             all_y.append(y.numpy())
             all_p.append(torch.sigmoid(logits).cpu().numpy())
     y_true = np.concatenate(all_y)

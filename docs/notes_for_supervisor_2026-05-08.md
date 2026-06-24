@@ -3,11 +3,49 @@
 **Date:** 2026-05-08
 **Author:** Lauren Pommer
 **Audience:** Hannes; supervisor
-**Status:** RESOLVED — Option A implemented (baseline_v2), see update below.
+**Status:** RESOLVED — Option A implemented (baseline_v2); Tier 2 (scalar head)
+explored. See updates below.
 
 ---
 
-## Update (2026-06-24): Option A implemented, and it worked
+## Update 2 (2026-06-24): Tier 2 scalar head — closes xG gap, but trades off counterfactuals
+
+We added a parallel scalar-feature head on top of v2 (Tier 2). Two variants:
+
+- **v3** ("all" 9 features incl. GK-coverage/offset/depth): test AUC **0.820**,
+  matching StatsBomb xG (0.821) — the predictive gap is closed. But the 200-shot
+  sweep regressed badly: anti-coaching (far-side) optima went from **0%** (v2) to
+  **19.5%**, edge-pinning 0.5% → 4.5%.
+- **v3b** ("context" 6 g-independent features only): test AUC **0.815**, best
+  calibration of any model (ECE 0.0065). Counterfactuals better than v3 but still
+  worse than v2 (far-side 14%).
+
+**The important bit (a real finding).** The "context" features are *g-independent*,
+so they add a constant to every grid cell's V and **cannot mathematically change
+which g is optimal**. Yet v3b's g* still degraded relative to v2. The only thing
+that differs is the CNN branch's learned weights: adding any auxiliary predictive
+head lets the conv trunk offload variance onto the scalar MLP, so the spatial
+branch becomes a worse *function of keeper position*. **Predictive accuracy and
+counterfactual-policy validity trade off, and the cause is training interference,
+not the inference-time features.**
+
+**Model selection going forward:**
+- **Positioning recommender (our actual goal): v2** — the only model with clean
+  counterfactuals (0% anti-coaching), AUC 0.809.
+- **Predictive benchmark vs StatsBomb xG: v3** (AUC 0.820 ≈ 0.821).
+- We propose reporting the v2/v3/v3b comparison itself as a contribution.
+
+**New question for the supervisor:** is it worth chasing "best of both" (e.g.
+stop-gradient between the scalar head and the conv trunk, or simply keeping two
+models for two purposes), or do we report this tension and move on to transfer
+eval (women / men_other) on v2?
+
+Artefacts: `results/counterfactual/v3_scalar/`, `results/counterfactual/v3b_context/`,
+`models/checkpoints/baseline_v3{,b}/`.
+
+---
+
+## Update 1 (2026-06-24): Option A implemented, and it worked
 
 We took **Option A** (add structural / goal-aware inputs) and it resolved the
 grid-dependence problem. Summary for the supervisor:

@@ -7,7 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Headline:** Option A worked. baseline_v2 adds goal-frame geometry channels +
 a spatial-preserving pool; the counterfactual sweep now produces sensible,
 grid-independent g* recommendations. The grid-dependence / anti-coaching
-pathology of v1 is resolved.
+pathology of v1 is resolved. Tier 2 (scalar head, v3/v3b) closed the StatsBomb
+xG gap on predictive accuracy but *degraded* counterfactual quality — so
+**v2 is the recommended positioning model; v3 is the predictive benchmark.**
+The predictive-vs-counterfactual tension is itself a result (see below).
 
 **Done (v1 baseline + diagnosis):**
 - EDA: 81k open-play shots with freeze frames; goal rate 9.7-10.3% across splits
@@ -32,14 +35,28 @@ pathology of v1 is resolved.
 - v2 aggregate over 200 seeded test shots (src/analysis/regret_distribution.py): median regret 0.0097 (goals 0.051, saves 0.008), max 0.238. y-edge pinned 1/200 (0.5%); far-side optima 0/200 (0.0%); post-side split 182 centre / 18 near / 0 far. Table: results/counterfactual/v2_geom/regret_200.csv
 - Also dropped the misleading accuracy_at_0.5 metric (frozen at 1−base_rate; a calibrated rare-event model rightly rarely predicts >0.5). Confirmed no class-imbalance pathology — the val plateau is overfitting, not imbalance starvation; balancing would only break calibration.
 
-**Future v2 levers / next (not yet done):**
-- **Tier 2 — parallel scalar head** (distance, angle, GK angular-coverage, body part, under_pressure): most likely to close the residual ~0.012 AUC gap to StatsBomb and sharpen near/far-post discrimination (v2 optima are 91% "centre"). Note: this adds hand-engineered scalars — see supervisor Q2 on the "purely spatial" methodological appeal.
-- Transfer eval (women / men_other) and latent embedding analysis — now meaningful since v2's g* is sensible
+**Done (Tier 2 = parallel scalar head, 2026-06-24):**
+- src/features/scalar_features.py: 9-feature vector — dist_to_goal, shot_angle, gk_coverage (fraction of goal occluded from shooter), gk_perp_offset, gk_depth, body-part one-hots (R/L/Head), under_pressure. Three are GK-dependent (GK_DEPENDENT_IDX = 2,3,4). Named subsets via FEATURE_SETS: "all" (9) and "context" (6 g-independent: drops gk_coverage/perp/depth).
+- DangerCNN gained `scalar_dim`: a parallel MLP (scalar_dim→32→32) concatenated with the CNN's 64-d embedding before the final layer. scalar_dim=0 is byte-identical to v1/v2. Dataset/train/evaluate thread include_scalars + scalar_feature_set and handle the (raster, scalars, label) 3-tuple; the sweep recomputes per-grid scalars (constant across g for "context").
+- **baseline_v3** (scalar_feature_set="all", 196k params): test AUC 0.820 ≈ StatsBomb xG 0.821 (gap closed from 0.012), Brier 0.0705, ECE 0.011. BUT counterfactuals regressed: 200-shot far-side/anti-coaching optima 39/200 (19.5%) vs v2's 0%; y-edge pinned 4.5%; post-side 67 centre/94 near/39 far.
+- **baseline_v3b** (scalar_feature_set="context", 195k params): test AUC 0.815, Brier 0.0708, ECE 0.0065 (best of all). Counterfactuals better than v3 but still not v2: far-side 28/200 (14%), pinned 1.5%, post-side 79 centre/93 near/28 far.
+- **Key finding — predictive vs counterfactual tension is a *training* effect, not an inference one.** The "context" scalars are g-independent, so they add a constant to every grid cell's logit and *cannot* change argmin_g — yet v3b's g* still degraded vs v2. The only difference is the CNN branch's learned weights: adding any auxiliary predictive head lets the conv layers offload variance onto the scalar MLP, so the spatial branch becomes a worse function of keeper position. Conclusion: a single model can't be both the best xG predictor and the best positioning recommender with this architecture.
+- Artifacts: results/counterfactual/v3_scalar/, results/counterfactual/v3b_context/ (8 PNGs + regret_200.csv each); models/checkpoints/baseline_v3{,b}/.
+
+**Recommendation / model selection:**
+- **Positioning recommender (project goal): use v2.** Only model with clean counterfactuals (0% anti-coaching).
+- **Predictive benchmark vs StatsBomb xG: cite v3** (AUC 0.820 ≈ 0.821).
+- The v2/v3/v3b sweep is a reportable result about auxiliary-head training interference.
+
+**Next (not yet done):**
+- Transfer eval (women / men_other) on v2 — now meaningful since v2's g* is sensible
+- Latent embedding analysis
+- Possible: revisit best-of-both via training tricks (e.g. stop-gradient between scalar head and conv trunk, or a two-model setup — v2 for g*, v3 for absolute P(goal))
 - Separate ball channel from shooter (rasterize.py still copies it); defenders-in-cone channel; wider crop x ∈ [60,122]; y-flip augmentation
 
 **Open questions:**
 - Is the constrained grid y ∈ [34, 46] a defensible canonical eval region? (Less load-bearing now that v2 doesn't pin to the edge regardless of grid.)
-- Tier 2 next, or transfer eval first? Awaiting Hannes / supervisor steer.
+- Worth pursuing best-of-both (stop-gradient / two-model), or report the tension as-is and move to transfer eval? Awaiting Hannes / supervisor steer.
 
 ## Project
 
@@ -55,7 +72,7 @@ University of Leipzig research project (Mathematics and Deep Learning module) an
 - `g` — goalkeeper (x, y) position (the variable being optimized)
 - `x` — everything else: shooter/ball position, attacking teammates, outfield defenders (goalkeeper excluded)
 
-**Architecture:** CNN on a rasterized pitch (80×60 grid). v1: 5 player channels (shooter, ball, attacking teammates, outfield defenders, goalkeeper) rendered as 2D Gaussian blobs, global-average-pool head. v2 (current): the same 5 player channels + 5 static goal-geometry channels (goal_frame, dist_to_goal, goal_angle, coord_x, coord_y) and a (4,3) spatial pool. Toggle via `include_geometry` / `in_channels` / `pool_size`.
+**Architecture:** CNN on a rasterized pitch (80×60 grid). v1: 5 player channels (shooter, ball, attacking teammates, outfield defenders, goalkeeper) rendered as 2D Gaussian blobs, global-average-pool head. v2 (recommended for positioning): the same 5 player channels + 5 static goal-geometry channels (goal_frame, dist_to_goal, goal_angle, coord_x, coord_y) and a (4,3) spatial pool. v3/v3b: v2 plus a parallel scalar-feature head (`scalar_dim`) — better xG prediction, worse counterfactuals. Toggle via `include_geometry` / `in_channels` / `pool_size` / `include_scalars` / `scalar_feature_set` / `scalar_dim`.
 
 **Scope (phase 1):** Open-play shots only. Excludes set pieces, penalties, and direct free kicks (`sub_type_name == 'Open Play'` filter on `df_event`).
 

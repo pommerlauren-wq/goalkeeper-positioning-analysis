@@ -30,12 +30,14 @@ class DangerCNN(nn.Module):
         in_channels: int = 5,
         dropout_p: float = 0.3,
         pool_size: int | tuple[int, int] = 1,
+        scalar_dim: int = 0,
     ) -> None:
         super().__init__()
         # Normalize to an (h, w) tuple; JSON round-trips pool_size as a list.
         if isinstance(pool_size, int):
             pool_size = (pool_size, pool_size)
         self.pool_size: tuple[int, int] = (int(pool_size[0]), int(pool_size[1]))
+        self.scalar_dim = scalar_dim
 
         self.conv1 = nn.Conv2d(in_channels, 32, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(32)
@@ -47,8 +49,22 @@ class DangerCNN(nn.Module):
         self.bn3 = nn.BatchNorm2d(128)
 
         self.fc1 = nn.Linear(128 * self.pool_size[0] * self.pool_size[1], 64)
+
+        # Tier 2: parallel head for explicit shot/keeper scalar features. When
+        # scalar_dim == 0 the model is identical to v1/v2 and forward ignores
+        # the (unused) scalars argument.
+        head_in = 64
+        if scalar_dim > 0:
+            self.scalar_mlp = nn.Sequential(
+                nn.Linear(scalar_dim, 32),
+                nn.ReLU(),
+                nn.Linear(32, 32),
+                nn.ReLU(),
+            )
+            head_in += 32
+
         self.dropout = nn.Dropout(dropout_p)
-        self.fc2 = nn.Linear(64, 1)
+        self.fc2 = nn.Linear(head_in, 1)
 
         self._init_weights()
 
@@ -63,7 +79,9 @@ class DangerCNN(nn.Module):
                 nn.init.xavier_uniform_(m.weight)
                 nn.init.zeros_(m.bias)
 
-    def forward_logits(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_logits(
+        self, x: torch.Tensor, scalars: torch.Tensor | None = None
+    ) -> torch.Tensor:
         x = F.relu(self.bn1(self.conv1(x)))
         x = F.max_pool2d(x, 2)
 
@@ -74,13 +92,20 @@ class DangerCNN(nn.Module):
 
         x = F.adaptive_avg_pool2d(x, self.pool_size).flatten(1)
 
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x.squeeze(-1)
+        h = F.relu(self.fc1(x))
+        if self.scalar_dim > 0:
+            if scalars is None:
+                raise ValueError(
+                    f"Model has scalar_dim={self.scalar_dim} but no scalars were passed."
+                )
+            h = torch.cat([h, self.scalar_mlp(scalars)], dim=1)
+        h = self.dropout(h)
+        return self.fc2(h).squeeze(-1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.sigmoid(self.forward_logits(x))
+    def forward(
+        self, x: torch.Tensor, scalars: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        return torch.sigmoid(self.forward_logits(x, scalars))
 
 
 def _print_param_breakdown(model: nn.Module) -> int:

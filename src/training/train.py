@@ -91,17 +91,21 @@ def _build_dataloaders(
 ) -> tuple[DataLoader, DataLoader]:
     cache_train = config["cache_train_in_memory"]
     include_geometry = config["include_geometry"]
+    include_scalars = config.get("include_scalars", False)
+    scalar_feature_set = config.get("scalar_feature_set", "all")
     train_ds = GoalkeeperShotsDataset(
         SPLITS_DIR / "train_shot_ids.csv",
         shots_df, freeze_df, cache_in_memory=cache_train,
-        include_geometry=include_geometry,
+        include_geometry=include_geometry, include_scalars=include_scalars,
+        scalar_feature_set=scalar_feature_set,
     )
     # If we're caching train, val (~615 MB) is a small extra cost and avoids
     # validation dominating per-epoch time.
     val_ds = GoalkeeperShotsDataset(
         SPLITS_DIR / "val_shot_ids.csv",
         shots_df, freeze_df, cache_in_memory=cache_train,
-        include_geometry=include_geometry,
+        include_geometry=include_geometry, include_scalars=include_scalars,
+        scalar_feature_set=scalar_feature_set,
     )
     common = {
         "batch_size": config["batch_size"],
@@ -114,6 +118,17 @@ def _build_dataloaders(
     return train_loader, val_loader
 
 
+def _unpack_batch(batch, device):
+    """Return (x, scalars, y) on device; scalars is None for 2-tuple batches."""
+    if len(batch) == 3:
+        x, scalars, y = batch
+        scalars = scalars.to(device, non_blocking=True)
+    else:
+        x, y = batch
+        scalars = None
+    return x.to(device, non_blocking=True), scalars, y
+
+
 def _run_validation(
     model: DangerCNN,
     loader: DataLoader,
@@ -124,15 +139,15 @@ def _run_validation(
     losses_weighted = 0.0
     all_y, all_p = [], []
     with torch.no_grad():
-        for x, y in loader:
+        for batch in loader:
             # Capture labels on CPU before any device transfer. MPS with
             # non_blocking=True can return garbage from a tensor that was
             # moved over and then read back via .cpu() while other work is
             # queued in between (verified failure mode on torch 2.11).
-            all_y.append(y.numpy())
-            x = x.to(device, non_blocking=True)
+            all_y.append(batch[-1].numpy())
+            x, scalars, y = _unpack_batch(batch, device)
             y = y.to(device)
-            logits = model.forward_logits(x)
+            logits = model.forward_logits(x, scalars)
             losses_weighted += criterion(logits, y).item() * x.size(0)
             all_p.append(torch.sigmoid(logits).cpu().numpy())
     y_true = np.concatenate(all_y)
@@ -204,11 +219,13 @@ def train_model(config: dict) -> dict:
     model = DangerCNN(
         in_channels=config["in_channels"],
         pool_size=config["pool_size"],
+        scalar_dim=config.get("scalar_dim", 0),
     ).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(
         f"Model: DangerCNN, {n_params:,} params "
-        f"(in_channels={config['in_channels']}, pool_size={config['pool_size']})"
+        f"(in_channels={config['in_channels']}, pool_size={config['pool_size']}, "
+        f"scalar_dim={config['scalar_dim']})"
     )
 
     criterion = nn.BCEWithLogitsLoss()
@@ -243,10 +260,10 @@ def train_model(config: dict) -> dict:
         model.train()
         running_loss = 0.0
         running_n = 0
-        for batch_idx, (x, y) in enumerate(train_loader):
-            x = x.to(device, non_blocking=True)
+        for batch_idx, batch in enumerate(train_loader):
+            x, scalars, y = _unpack_batch(batch, device)
             y = y.to(device, non_blocking=True)
-            logits = model.forward_logits(x)
+            logits = model.forward_logits(x, scalars)
             loss = criterion(logits, y)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -321,11 +338,17 @@ def train_model(config: dict) -> dict:
 
 
 if __name__ == "__main__":
-    # baseline_v2: goal-geometry channels (in_channels=10) + spatial-preserving
-    # pool. Pool is (4, 3) not square: the pre-pool map is 20x15 and MPS needs
-    # the output to divide it evenly (20/4, 15/3); it also matches the pitch
-    # (4 along x/depth, 3 across y). ~135k params, inside the 100-200k budget.
-    # Set include_geometry=False, in_channels=5, pool_size=1 to reproduce v1.
+    # baseline_v3b = v2 (goal-geometry channels + (4,3) spatial pool) plus a
+    # Tier 2 scalar head restricted to the g-INDEPENDENT "context" features
+    # (distance, angle, body part, under_pressure). v3 ("all" features) closed
+    # the xG gap but reintroduced anti-coaching g* by giving the model a second,
+    # non-spatial route to the keeper position; v3b keeps the shot-difficulty
+    # signal while leaving keeper position purely spatial.
+    # For v3 set scalar_feature_set="all"; for v2 include_scalars=False,
+    # scalar_dim=0; for v1 also include_geometry=False, in_channels=5, pool_size=1.
+    from src.features.scalar_features import scalar_dim
+
+    scalar_feature_set = "context"
     config = {
         "epochs": 50,
         "batch_size": 64,
@@ -335,10 +358,13 @@ if __name__ == "__main__":
         "early_stopping_patience": 10,
         "device": "auto",
         "checkpoint_dir": "models/checkpoints",
-        "run_name": "baseline_v2",
+        "run_name": "baseline_v3b",
         "include_geometry": True,
         "in_channels": 10,
         "pool_size": [4, 3],
+        "include_scalars": True,
+        "scalar_feature_set": scalar_feature_set,
+        "scalar_dim": scalar_dim(scalar_feature_set),
         "log_every_n_batches": 0,
         "cache_train_in_memory": True,
         "num_workers": 0,
