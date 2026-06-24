@@ -15,6 +15,9 @@ matplotlib>=3.8
 seaborn>=0.13
 plotly>=5.18
 
+# StatsBomb data access (Sbopen) + pitch plotting — used in src/, not just notebooks
+mplsoccer>=1.1
+
 # Notebooks
 jupyter
 ipykernel

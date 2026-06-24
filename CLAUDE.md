@@ -100,8 +100,8 @@ University of Leipzig research project (Mathematics and Deep Learning module) an
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-# Additional packages used in notebooks (not yet in requirements.txt):
-pip install mplsoccer squarify wordcloud
+# Notebook-only EDA extras (not in requirements.txt):
+pip install squarify wordcloud
 ```
 
 ## Commands
