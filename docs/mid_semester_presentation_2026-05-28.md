@@ -6,6 +6,16 @@
 **Collaborator:** Hannes
 **Topic:** Counterfactual goalkeeper positioning from StatsBomb event data
 
+> **Status: DELIVERED — historical record (talk given 2026-05-28).**
+> This briefing captures the project at the `baseline_v1` stage, when the
+> counterfactual `g*` failure was an open finding and the path forward (A / B / C)
+> was a pending supervisor decision. **Everything in §7 has since been resolved:**
+> we took Option A, shipped `baseline_v2` (clean counterfactuals), explored a
+> scalar head (`v3`/`v3b`), and validated v2 with multi-seed CIs + transfer eval.
+> For the post-presentation state, see **`docs/project_overview_2026-06-30.md`**
+> (consolidated current overview) and `docs/notes_for_supervisor_2026-05-08.md`
+> (Updates 1–3). This file is left unchanged as a snapshot of the talk.
+
 This file is a single-source briefing for the mid-semester talk: what we have done,
 what works, what doesn't, what's next. Visual artefacts are referenced by path so
 they can be dropped straight into slides.

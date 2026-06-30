@@ -2,7 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status (updated 2026-06-24)
+## Status (updated 2026-06-30)
+
+**Docs:** mid-semester talk delivered 2026-05-28 (`docs/mid_semester_presentation_2026-05-28.md`,
+now a historical snapshot). Current consolidated supervisor briefing:
+`docs/project_overview_2026-06-30.md`.
 
 **Headline:** Option A worked. baseline_v2 adds goal-frame geometry channels +
 a spatial-preserving pool; the counterfactual sweep now produces sensible,
