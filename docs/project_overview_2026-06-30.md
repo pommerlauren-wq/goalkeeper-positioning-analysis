@@ -182,6 +182,13 @@ Analysis and write-up, not new architecture:
 
 ## 8. Artefacts to look at
 
+**Report-ready figures (`reports/figures/`, regenerate via `python src/analysis/report_figures.py`):**
+- `cf_v2_vs_v3_1e582bc0.png` — the headline finding: the *same* wide shot swept
+  under v2 and v3 on a shared scale. v2 keeps `g*` on the shooter's (near) side;
+  v3's scalar head pulls `g*` to the far post. The 0% vs 19.5% tension, in one image.
+- `far_side_by_model.png` — far-side / edge-pinned optimum rate across v2 / v3 / v3b.
+
+**Raw outputs:**
 - `README.md` — pipeline, model-variant table, results.
 - `CLAUDE.md` — full chronological status log (v1 → v2 → v3/v3b → validation → jitter).
 - `results/eval/v2_multiseed_summary.csv` — per-seed predictive + counterfactual numbers.
