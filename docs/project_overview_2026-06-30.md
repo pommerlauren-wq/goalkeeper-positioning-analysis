@@ -7,9 +7,9 @@
 **Status:** Core modelling complete; v2 is the recommended deliverable. Open
 work is analysis + write-up, not new architecture.
 
-This is the single current-state briefing. It supersedes the mid-semester talk
-(`docs/mid_semester_presentation_2026-05-28.md`, delivered, v1-era) and folds in
-the three update notes since (`docs/notes_for_supervisor_2026-05-08.md`).
+This is the single current-state briefing. It supersedes the (now retired)
+mid-semester talk briefing and folds in the three update notes since
+(`docs/notes_for_supervisor_2026-05-08.md`).
 
 ---
 
