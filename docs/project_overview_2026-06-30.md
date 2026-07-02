@@ -92,11 +92,19 @@ Neutral result (see §6).
 | StatsBomb xG | 0.821 | — | — | external benchmark |
 | baseline_v1 | 0.803 | 0.075 | 0.010 | spatial only, global pool |
 | **baseline_v2** | **0.814 ± 0.003** | **0.0716 ± 0.0001** | **0.0077 ± 0.0008** | 5-seed mean ± std; **recommended** |
-| baseline_v3 (all scalars) | 0.820 | 0.0705 | 0.011 | ≈ StatsBomb xG; bad counterfactuals |
-| baseline_v3b (context scalars) | 0.815 | 0.0708 | 0.0065 | best calibration |
+| baseline_v3 (all scalars) | 0.819 ± 0.001 | 0.0704 ± 0.0001 | 0.0097 ± 0.0025 | 5-seed mean ± std; ≈ StatsBomb xG; bad counterfactuals |
+| baseline_v3b (context scalars) | 0.815 | 0.0708 | 0.0065 | single seed; best calibration |
 
 v2 closes most of the v1→xG gap (residual ~0.007 AUC) while keeping calibration
 within 1pp.
+
+**Is v3 actually a better predictor than v2?** Both are now 5-seed, on matched
+seeds, so we can compare properly (paired). Mean paired ΔAUC = **+0.0050** in
+v3's favour, paired *t* = 2.80, **p ≈ 0.049** — real, but *only marginally*
+significant, and driven substantially by one seed (seed 42: Δ = +0.011; seed 3:
+Δ ≈ 0). So v3's predictive edge over v2 is ~0.5 AUC points and borderline; it is
+**not** a decisive predictive win, and it comes at a large counterfactual cost
+(§4.2). The v3 ≈ StatsBomb xG (0.821) claim holds; the v3 ≫ v2 claim does not.
 
 ### 4.2 Counterfactual quality (200-shot seeded sample — the property that matters)
 
@@ -107,11 +115,15 @@ measure how often `g*` is pathological: pinned to the grid edge, or on the
 | Model | far-side / anti-coaching | edge-pinned | post-side split (centre / near / far) |
 |---|---|---|---|
 | **baseline_v2** | **0.2% ± 0.45%** (5-seed) | 0.7% ± 0.45% | ~183 / 17 / 0 |
-| baseline_v3 (all) | **19.5%** | 4.5% | 67 / 94 / 39 |
-| baseline_v3b (context) | 14% | 1.5% | 79 / 93 / 28 |
+| baseline_v3 (all) | **16.3% ± 7.3%** (5-seed) | 9.9% ± 15.5% | 67 / 94 / 39 (seed 42) |
+| baseline_v3b (context) | 14% (single seed) | 1.5% | 79 / 93 / 28 |
 
-v2 vs v3 on the far-side metric is ~40σ apart. v2's clean counterfactuals are
-**reproducible across seeds**, not a lucky run.
+v2 vs v3 on the far-side metric is ~40σ apart, and the 5-seed v3 run shows the
+penalty is not only large but **unstable**: far-side ranges 6–26% and edge-pinning
+1.5–37.5% across seeds (one seed pins 37.5% of optima to the grid edge). v2's
+clean counterfactuals, by contrast, are tight and reproducible (far-side 0–1%,
+pinning ≤1.5%) — not a lucky run. So the auxiliary head doesn't just trade a bit
+of `g*` quality for accuracy; it makes the positioning policy erratic.
 
 ### 4.3 The headline finding — a predictive vs counterfactual *training* tension
 
@@ -145,10 +157,14 @@ domain-invariant even though raw P(goal) accuracy drops** on harder splits.
 
 - **Positioning recommender (the project's actual goal): use `baseline_v2`.**
   It is the only model with clean, reproducible, transfer-stable counterfactuals.
-- **Predictive benchmark vs StatsBomb xG: cite `baseline_v3`** (AUC 0.820 ≈
-  0.821). Caveat: v2's multi-seed mean is 0.814, so the v2→v3 *predictive* gap is
-  only ~2σ; a v3 multi-seed run would make that airtight. The *counterfactual*
-  gap needs no further seeds.
+- **Predictive benchmark vs StatsBomb xG: cite `baseline_v3`** (5-seed AUC
+  0.819 ± 0.001 ≈ 0.821). This claim is now firm.
+- **But v3 is *not* a decisive predictive upgrade over v2.** With both at 5 seeds,
+  the paired edge is only +0.005 AUC (p ≈ 0.049), while v3's counterfactual policy
+  is far worse and erratic across seeds. So the recommendation stands and is now
+  quantified: **v2 for positioning, v3 only as the xG-parity benchmark** — you are
+  giving up ~0.5 borderline AUC points, not a real predictive advantage, to keep a
+  clean and stable `g*`.
 - The v2/v3/v3b comparison is a reportable result about auxiliary-head training
   interference.
 
@@ -169,14 +185,16 @@ domain-invariant even though raw P(goal) accuracy drops** on harder splits.
 
 Analysis and write-up, not new architecture:
 
-- **v3 multi-seed CIs** — to firm up the v2-vs-v3 *predictive* comparison (~2σ now).
-- **Latent embedding analysis** — inspect the pre-MLP features.
+- ✅ **v3 multi-seed CIs** — done. Firms up the v2-vs-v3 predictive comparison:
+  v3 0.819 ± 0.001, paired edge over v2 only +0.005 AUC (p ≈ 0.049). See §4.1.
+- ✅ **Latent embedding analysis** — done. PCA of v2's 64-d embedding; PC1 is a
+  danger axis (r = −0.85 with P(goal)). Figure `reports/figures/latent_embedding_v2.png`.
 - **Best-of-both?** — worth chasing (stop-gradient between scalar head and conv
   trunk, or simply two models for two purposes), or report the tension as-is?
   *This is the main steer we'd like from you.*
 - Smaller ideas: separate ball channel from shooter; defenders-in-cone channel;
   wider crop x ∈ [60, 122]; y-flip augmentation.
-- The written report.
+- **The written report** — now the main remaining deliverable.
 
 ---
 
@@ -187,11 +205,14 @@ Analysis and write-up, not new architecture:
   under v2 and v3 on a shared scale. v2 keeps `g*` on the shooter's (near) side;
   v3's scalar head pulls `g*` to the far post. The 0% vs 19.5% tension, in one image.
 - `far_side_by_model.png` — far-side / edge-pinned optimum rate across v2 / v3 / v3b.
+- `latent_embedding_v2.png` — PCA of v2's 64-d CNN embedding, coloured by P(goal) /
+  xG / distance / outcome; PC1 is a danger axis (regenerate via
+  `python src/analysis/latent_embedding.py`).
 
 **Raw outputs:**
 - `README.md` — pipeline, model-variant table, results.
 - `CLAUDE.md` — full chronological status log (v1 → v2 → v3/v3b → validation → jitter).
-- `results/eval/v2_multiseed_summary.csv` — per-seed predictive + counterfactual numbers.
+- `results/eval/v2_multiseed_summary.csv`, `results/eval/v3_multiseed_summary.csv` — per-seed predictive + counterfactual numbers.
 - `results/counterfactual/v2_geom/` — v2 example heatmaps + `regret_200.csv`.
 - `results/counterfactual/v3_scalar/`, `.../v3b_context/` — the tradeoff, side by side.
 - `results/counterfactual/v2_transfer_{women,men_other}/` — transfer counterfactuals.

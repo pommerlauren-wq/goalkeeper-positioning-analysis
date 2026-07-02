@@ -51,6 +51,8 @@ models/*
 # results/), not the 5 throwaway checkpoints or per-seed prediction dumps.
 models/checkpoints/v2_seeds/
 results/eval/v2_seeds/
+models/checkpoints/v3_seeds/
+results/eval/v3_seeds/
 
 # Generated outputs (plots, reports, smoke-test artifacts)
 results/*

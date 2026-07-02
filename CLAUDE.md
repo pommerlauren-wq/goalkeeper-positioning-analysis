@@ -57,16 +57,19 @@ The predictive-vs-counterfactual tension is itself a result (see below).
 - Motivation: the sweep evaluates V(x,g) at GK positions never seen in training, so jitter should align train/eval and smooth V(x,g). **Result: neutral.** Predictive AUC 0.810 (within v2's 0.809–0.817 multi-seed range), ECE 0.0060 (slightly better). Counterfactual: far-side 0%, pinned 1.0%, median regret 0.0076 — same as v2. Crucially, **direct landscape roughness (mean total-variation of the danger grid) is identical (0.0053 vs 0.0053)** — the smoothing hypothesis did NOT hold.
 - Why: v2's goal-geometry channels already give a smooth, clean V(x,g); there was no brittleness for jitter to fix. Useful as (a) an empirical answer to the supervisor's augmentation suggestion — not a needed lever here — and (b) a robustness confirmation that v2's clean g* survives perturbing every training position. Single-seed; not worth a multi-seed run given roughness is flat. Artifacts: results/counterfactual/v2_jitter/, models/checkpoints/baseline_v2_jitter/.
 
+**Done (v3 multi-seed CIs + latent embedding, 2026-07-02):**
+- v3 multi-seed CIs (5 seeds, src/training/multiseed_v2.py generalized to take a model tag: `python src/training/multiseed_v2.py v3`). v3 test AUC 0.819 ± 0.001, Brier 0.0704 ± 0.0001, ECE 0.0097 ± 0.0025. Both v2 and v3 now 5-seed on matched seeds → **paired** comparison: mean ΔAUC = +0.0050 in v3's favour, paired t=2.80, **p ≈ 0.049** — real but only marginally significant, driven mostly by seed 42 (Δ +0.011; seed 3 Δ ≈ 0). So v3 ≈ StatsBomb xG (0.821) is firm, but v3 ≫ v2 is NOT: the predictive edge is ~0.5 AUC pts and borderline. v3's counterfactuals are also unstable across seeds (far-side 16.3% ± 7.3%, range 6–26%; pinned 9.9% ± 15.5%, one seed 37.5%) vs v2's tight 0.2%/0.7%. Summary: results/eval/v3_multiseed_summary.csv (+ per-seed regret CSVs in results/counterfactual/v3_seeds/; throwaway checkpoints gitignored, mirroring v2).
+- Latent embedding analysis (src/analysis/latent_embedding.py): hooks v2's 64-d ReLU(fc1) embedding, runs the test split, PCA→2D. PC1 explains 48.7% of variance and is a **danger axis** — r = −0.85 with predicted P(goal), −0.72 with StatsBomb xG, +0.68 with shooter→goal distance; goals cluster in its low tail. Confirms the v2 representation is organized around danger/geometry. Figure: reports/figures/latent_embedding_v2.png. Reads include_geometry/include_scalars from the checkpoint config so it also runs on v1/v3.
+
 **Recommendation / model selection:**
 - **Positioning recommender (project goal): use v2.** Only model with clean counterfactuals (0.2% ± 0.45% anti-coaching across seeds), and they hold on transfer.
-- **Predictive benchmark vs StatsBomb xG: cite v3** (AUC 0.820 ≈ 0.821). NOTE: v2's multi-seed mean is 0.814, so the v2→v3 predictive gap (~0.006) is only ~2σ; a v3 multi-seed run would be needed to make that comparison airtight. The *counterfactual* gap needs no further seeds.
+- **Predictive benchmark vs StatsBomb xG: cite v3** (5-seed AUC 0.819 ± 0.001 ≈ 0.821 — now firm). But v3 is NOT a decisive upgrade over v2: paired edge only +0.005 AUC (p ≈ 0.049), bought with a large, seed-unstable counterfactual penalty. Net: v2 for positioning, v3 only for xG-parity benchmarking.
 - The v2/v3/v3b sweep is a reportable result about auxiliary-head training interference.
 
 **Next (not yet done):**
-- v3 multi-seed CIs (to firm up the v2-vs-v3 *predictive* comparison)
-- Latent embedding analysis
-- Possible: revisit best-of-both via training tricks (e.g. stop-gradient between scalar head and conv trunk, or a two-model setup — v2 for g*, v3 for absolute P(goal))
-- Separate ball channel from shooter (rasterize.py still copies it); defenders-in-cone channel; wider crop x ∈ [60,122]; y-flip augmentation
+- Possible: revisit best-of-both via training tricks (e.g. stop-gradient between scalar head and conv trunk, or a two-model setup — v2 for g*, v3 for absolute P(goal)); a defenders-in-cone *spatial* channel is a promising counterfactual-clean way to test whether it's the parallel head (not the extra info) that breaks g*
+- The written report (now the main remaining deliverable)
+- Separate ball channel from shooter (rasterize.py still copies it); wider crop x ∈ [60,122]; y-flip augmentation
 
 **Open questions:**
 - Is the constrained grid y ∈ [34, 46] a defensible canonical eval region? (Less load-bearing now that v2 doesn't pin to the edge regardless of grid.)
