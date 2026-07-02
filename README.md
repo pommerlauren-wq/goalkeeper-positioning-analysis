@@ -214,7 +214,7 @@ These give the CNN explicit knowledge of the goal frame, which is why v2's `g*` 
 
 **Scalar features (v3/v3b, parallel head):** `dist_to_goal`, `shot_angle`, `gk_coverage`, `gk_perp_offset`, `gk_depth`, body-part one-hots, `under_pressure`. The `"context"` subset (v3b) drops the three GK-dependent ones.
 
-## Results (updated 2026-06-24)
+## Results (updated 2026-07-02)
 
 ### Predictive (test split)
 
@@ -222,7 +222,7 @@ These give the CNN explicit knowledge of the goal frame, which is why v2's `g*` 
 |---|---|---|---|
 | baseline_v1 | 0.803 | 0.075 | 0.010 |
 | **baseline_v2** (5-seed) | **0.814 ± 0.003** | 0.0716 ± 0.0001 | 0.0077 ± 0.0008 |
-| baseline_v3 | 0.820 | 0.0705 | 0.011 |
+| baseline_v3 (5-seed) | 0.819 ± 0.001 | 0.0704 ± 0.0001 | 0.0097 ± 0.0025 |
 | baseline_v3b | 0.815 | 0.0708 | 0.0065 |
 | StatsBomb xG | 0.821 | 0.070 | 0.008 |
 
@@ -232,7 +232,7 @@ These give the CNN explicit knowledge of the goal frame, which is why v2's `g*` 
 |---|---|---|---|
 | baseline_v1 | — | up to 7/8 examples | grid-dependent, pervasive |
 | **baseline_v2** (5-seed) | 0.0099 ± 0.0011 | 0.7% ± 0.45% | **0.2% ± 0.45%** |
-| baseline_v3 | 0.015 | 4.5% | 19.5% |
+| baseline_v3 (5-seed) | 0.0125 ± 0.0032 | 9.9% ± 15.5% | 16.3% ± 7.3% |
 | baseline_v3b | 0.008 | 1.5% | 14% |
 
 ### Transfer (baseline_v2, out-of-domain)
@@ -248,8 +248,9 @@ These give the CNN explicit knowledge of the goal frame, which is why v2's `g*` 
 ### Key findings
 
 - **v1 → v2:** v1 had no structural knowledge of the goal frame, so `V` dropped monotonically as the synthetic keeper left the goal mouth — `g*` pinned to the sweep-grid edge and recommended anti-coaching far-post positions. Adding goal-geometry channels + a spatial pool resolved this; `g*` is now grid-independent and coaching-consistent.
-- **v3/v3b — a predictive vs counterfactual tradeoff.** Adding a scalar head closes the StatsBomb xG gap but degrades `g*`. Notably this happens even for v3b's *g-independent* features (which mathematically cannot change `argmin_g`): the degradation is a **training-interference** effect — the auxiliary head reshapes the conv trunk so the spatial branch becomes a worse function of keeper position. A single model can't be both the best predictor and the best positioning recommender with this architecture.
+- **v3/v3b — a predictive vs counterfactual tradeoff.** Adding a scalar head closes the StatsBomb xG gap but degrades `g*`. Notably this happens even for v3b's *g-independent* features (which mathematically cannot change `argmin_g`): the degradation is a **training-interference** effect — the auxiliary head reshapes the conv trunk so the spatial branch becomes a worse function of keeper position. A single model can't be both the best predictor and the best positioning recommender with this architecture. Multi-seed CIs (5 seeds each) sharpen this: the v3 predictive edge over v2 is only **+0.005 AUC (paired _p_ ≈ 0.049)**, while v3's `g*` quality is not just worse but unstable across seeds (far-side 6–26%, pinning up to 37.5%).
 - **v2 generalizes for positioning.** Predictive AUC drops modestly out-of-domain, but `g*` quality is nearly domain-invariant, because the goal-frame geometry driving it is the same in every league and in the women's game.
+- **What v2 encodes.** PCA of v2's 64-d embedding shows PC1 (49% of variance) is a *danger axis* — it correlates −0.85 with predicted P(goal), −0.72 with StatsBomb xG, and +0.68 with shooter→goal distance — so the representation is organized around danger/geometry rather than raw player density.
 
 See `docs/notes_for_supervisor_2026-05-08.md` for the decision-point write-up and resolution, and `CLAUDE.md` for the detailed status log.
 

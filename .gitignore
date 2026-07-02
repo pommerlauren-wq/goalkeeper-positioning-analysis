@@ -46,6 +46,9 @@ models/*
 *.ckpt
 *.h5
 !models/checkpoints/**/*.pt
+# ...but not the last-epoch weights: best.pt is what eval/sweep/multiseed load,
+# so last.pt is redundant bloat.
+models/checkpoints/**/last.pt
 
 # Multi-seed CI runs: keep only the summary + per-seed regret CSVs (under
 # results/), not the 5 throwaway checkpoints or per-seed prediction dumps.
@@ -74,6 +77,8 @@ lightning_logs/
 
 # Misc
 *.log
+# throwaway bundles (e.g. goalkeeper-report-overleaf.zip — Overleaf upload)
+*.zip
 .coverage
 htmlcov/
 

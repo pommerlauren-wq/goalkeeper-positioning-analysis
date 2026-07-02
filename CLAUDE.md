@@ -2,10 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status (updated 2026-06-30)
+## Status (updated 2026-07-02)
 
 **Docs:** current consolidated supervisor briefing is
-`docs/project_overview_2026-06-30.md` (mid-semester talk delivered 2026-05-28;
+`docs/project_overview_2026-07-02.md` (mid-semester talk delivered 2026-05-28;
 its briefing doc has been retired — see git history if needed).
 
 **Headline:** Option A worked. baseline_v2 adds goal-frame geometry channels +

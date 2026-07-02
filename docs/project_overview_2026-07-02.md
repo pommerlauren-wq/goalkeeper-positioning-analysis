@@ -1,6 +1,6 @@
 # Project overview — counterfactual goalkeeper positioning
 
-**Date:** 2026-06-30
+**Date:** 2026-07-02
 **Author:** Lauren Pommer
 **Audience:** Hannes; supervisor
 **Module:** Math and Machine Learning Praktikum, University of Leipzig
