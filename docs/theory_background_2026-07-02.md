@@ -1,6 +1,6 @@
 # Theoretical background — for the mid-semester talk
 
-**Date:** 2026-05-28
+**Date:** 2026-07-02 (originally 2026-05-28)
 **Presenter:** Lauren Pommer
 **Module:** Math and Machine Learning Praktikum, University of Leipzig
 
