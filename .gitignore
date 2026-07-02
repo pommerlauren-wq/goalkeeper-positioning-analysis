@@ -76,3 +76,14 @@ lightning_logs/
 *.log
 .coverage
 htmlcov/
+
+# LaTeX build artifacts (report.tex is the source; PDF regenerates via tectonic/Overleaf)
+reports/*.pdf
+reports/*.aux
+reports/*.bbl
+reports/*.blg
+reports/*.out
+reports/*.toc
+reports/*.synctex.gz
+reports/*.fls
+reports/*.fdb_latexmk
