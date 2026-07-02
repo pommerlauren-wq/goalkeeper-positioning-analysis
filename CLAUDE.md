@@ -27,7 +27,7 @@ The predictive-vs-counterfactual tension is itself a result (see below).
 - Pearson correlation with StatsBomb xG = 0.74 (agreement in direction, independent in absolute terms)
 - Training plateaus around epoch 5-7; later epochs overfit train without improving val. Diagnosis: saturated input representation, not broken model
 - Counterfactual sweep V(x, g) runs end-to-end on baseline_v1: 8 example shots, wide + constrained grids, regret CSV
-- v1 finding: g* is grid-dependent (wide grid 7/8 pin behind posts; constrained 2/8 pin at edge). v1 has no structural knowledge of the goal frame, so V drops monotonically as the synthetic GK moves *away* from the goal mouth — a spurious "GKs in goal mouth correlate with goals" signal. Decision-point doc: docs/notes_for_supervisor_2026-05-08.md (options A/B/C)
+- v1 finding: g* is grid-dependent (wide grid 7/8 pin behind posts; constrained 2/8 pin at edge). v1 has no structural knowledge of the goal frame, so V drops monotonically as the synthetic GK moves *away* from the goal mouth — a spurious "GKs in goal mouth correlate with goals" signal. Decision-point doc: docs/notes_for_supervisor_2026-07-02.md (options A/B/C)
 
 **Done (v2 = Option A, 2026-06-24):**
 - Tier 1 feature engineering shipped. rasterize_shot(include_geometry=True) appends 5 static channels after the GK channel: goal_frame (Gaussian ridge on the goal-line segment), dist_to_goal, goal_angle (posts' subtended view angle), coord_x, coord_y (CoordConv). GK stays at channel index 4 in both 5- and 10-channel layouts.

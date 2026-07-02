@@ -252,7 +252,7 @@ These give the CNN explicit knowledge of the goal frame, which is why v2's `g*` 
 - **v2 generalizes for positioning.** Predictive AUC drops modestly out-of-domain, but `g*` quality is nearly domain-invariant, because the goal-frame geometry driving it is the same in every league and in the women's game.
 - **What v2 encodes.** PCA of v2's 64-d embedding shows PC1 (49% of variance) is a *danger axis* — it correlates −0.85 with predicted P(goal), −0.72 with StatsBomb xG, and +0.68 with shooter→goal distance — so the representation is organized around danger/geometry rather than raw player density.
 
-See `docs/notes_for_supervisor_2026-05-08.md` for the decision-point write-up and resolution, and `CLAUDE.md` for the detailed status log.
+See `docs/notes_for_supervisor_2026-07-02.md` for the decision-point write-up and resolution, and `CLAUDE.md` for the detailed status log.
 
 ## Tests / lint
 

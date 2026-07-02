@@ -9,7 +9,7 @@ work is analysis + write-up, not new architecture.
 
 This is the single current-state briefing. It supersedes the (now retired)
 mid-semester talk briefing and folds in the three update notes since
-(`docs/notes_for_supervisor_2026-05-08.md`).
+(`docs/notes_for_supervisor_2026-07-02.md`).
 
 ---
 

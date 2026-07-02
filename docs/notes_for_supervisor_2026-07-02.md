@@ -1,6 +1,6 @@
 # Counterfactual goalkeeper sweep — what we found, and an open question
 
-**Date:** 2026-05-08
+**Date:** 2026-07-02 (originally 2026-05-08; maintained as work progressed)
 **Author:** Lauren Pommer
 **Audience:** Hannes; supervisor
 **Status:** RESOLVED — Option A implemented (baseline_v2); Tier 2 (scalar head)
